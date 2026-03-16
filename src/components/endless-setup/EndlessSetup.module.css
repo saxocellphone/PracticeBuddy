@@ -1,0 +1,312 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.sectionTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.presetList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.presetCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.presetCard:hover {
+  background: var(--color-surface-hover);
+}
+
+.presetCardActive {
+  border-color: var(--color-accent);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.presetHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.presetName {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.presetBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
+.presetDescription {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.presetConfig {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.configLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.noteGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-xs);
+}
+
+.noteButton {
+  padding: var(--space-sm) var(--space-xs);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.noteButton:hover {
+  background: var(--color-border);
+}
+
+.noteButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.octaveRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.octaveButtons {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.octaveButton {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.octaveButton:hover {
+  background: var(--color-border);
+}
+
+.octaveButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.shiftRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.shiftButtons {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.shiftButton {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.shiftButton:hover {
+  background: var(--color-border);
+}
+
+.shiftButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.toggleCheckbox {
+  accent-color: var(--color-accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.toggleHint {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  width: 100%;
+  padding-left: 28px;
+}
+
+.preview {
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.previewTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.previewSteps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  align-items: center;
+}
+
+.previewStep {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background: var(--color-surface);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+}
+
+.previewArrow {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.customSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.customList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.customItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.customItemName {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.customItemSteps {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.customItemButton {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.customItemButton:hover {
+  background: var(--color-border);
+}
+
+.customItemDelete {
+  color: var(--color-incorrect);
+  border-color: transparent;
+  background: transparent;
+}
+
+.customItemDelete:hover {
+  background: var(--color-incorrect-bg);
+}
+
+.createButton {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.createButton:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}

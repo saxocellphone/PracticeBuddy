@@ -1,0 +1,361 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.sectionTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nameInput {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.nameInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.directionButtons {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.directionButton {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  transition: all var(--transition-fast);
+}
+
+.directionButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.directionButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.shiftButtons {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.shiftButton {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.shiftButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.shiftButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.toggleCheckbox {
+  accent-color: var(--color-accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.toggleHint {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  width: 100%;
+  padding-left: 28px;
+}
+
+.stepList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.stepIndex {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  min-width: 20px;
+}
+
+.stepLabel {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.stepAction {
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.stepAction:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.stepDelete:hover {
+  color: var(--color-incorrect);
+  background: var(--color-incorrect-bg);
+}
+
+.emptySteps {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.addStepForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+}
+
+.addStepLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.noteGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-xs);
+}
+
+.noteButton {
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.noteButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.noteButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.octaveRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.octaveButtons {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.octaveButton {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.octaveButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.octaveButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.scaleButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.scaleButton {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+.scaleButton:hover {
+  background: var(--color-surface-hover);
+}
+
+.scaleButtonActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.addStepActions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.addButton {
+  flex: 1;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  border: none;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.addButton:hover {
+  background: var(--color-accent-hover);
+}
+
+.addButton:disabled {
+  background: var(--color-border);
+  cursor: not-allowed;
+}
+
+.cancelAddButton {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancelAddButton:hover {
+  background: var(--color-border);
+}
+
+.addStepTrigger {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.addStepTrigger:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.saveButton {
+  flex: 1;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  border: none;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.saveButton:hover {
+  background: var(--color-accent-hover);
+}
+
+.saveButton:disabled {
+  background: var(--color-border);
+  cursor: not-allowed;
+}
+
+.cancelButton {
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancelButton:hover {
+  background: var(--color-surface-hover);
+}

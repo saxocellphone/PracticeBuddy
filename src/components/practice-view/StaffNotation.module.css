@@ -1,0 +1,24 @@
+.staffContainer {
+  overflow-x: auto;
+  padding: var(--space-sm) 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.staffContainer::-webkit-scrollbar {
+  height: 4px;
+}
+
+.staffContainer::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.staffContainer::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.staffSvg {
+  display: block;
+  height: auto;
+}
