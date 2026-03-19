@@ -5,15 +5,13 @@ import styles from './EndlessResults.module.css'
 interface EndlessResultsProps {
   endlessState: EndlessSessionState
   onRetry: () => void
-  onChangeSequence: () => void
-  onSwitchToSingle: () => void
+  onGoHome: () => void
 }
 
 export function EndlessResults({
   endlessState,
   onRetry,
-  onChangeSequence,
-  onSwitchToSingle,
+  onGoHome,
 }: EndlessResultsProps) {
   const { results, cumulativeStats } = endlessState
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
@@ -151,17 +149,10 @@ export function EndlessResults({
         <button className={styles.retryButton} onClick={onRetry}>
           Practice Again
         </button>
-        <button className={styles.secondaryButton} onClick={onChangeSequence}>
-          Change Sequence
+        <button className={styles.secondaryButton} onClick={onGoHome}>
+          Home
         </button>
       </div>
-      <button
-        className={styles.secondaryButton}
-        onClick={onSwitchToSingle}
-        style={{ width: '100%' }}
-      >
-        Switch to Single Scale
-      </button>
     </div>
   )
 }

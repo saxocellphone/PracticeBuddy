@@ -1,185 +1,248 @@
-.container {
+/* Three-column layout */
+.threeColumnLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .threeColumnLayout {
+    display: grid;
+    grid-template-columns: 280px 420px 1fr;
+    gap: var(--space-xl);
+    align-items: flex-start;
+  }
+
+  .leftColumn,
+  .middleColumn,
+  .previewColumn {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.middleColumn {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
 }
 
+.previewColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* Section titles (Presets / Custom Sequences) */
 .sectionTitle {
-  font-size: 0.85rem;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
 }
 
-.presetList {
+/* Category headers in left column */
+.categoryGroup {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
 }
 
-.presetCard {
+.categoryHeader {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 20px;
+  margin-bottom: 4px;
+}
+
+.categoryGroup:first-of-type .categoryHeader {
+  margin-top: 0;
+}
+
+/* Preset rows (44px flat list) */
+.presetRow {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background 120ms ease;
+  border: none;
+  background: transparent;
+  width: 100%;
   text-align: left;
+  border-left: 3px solid transparent;
 }
 
-.presetCard:hover {
+.presetRow:hover {
   background: var(--color-surface-hover);
 }
 
-.presetCardActive {
-  border-color: var(--color-accent);
-  background: rgba(99, 102, 241, 0.08);
+.presetRowActive {
+  background: rgba(99, 102, 241, 0.07);
+  border-left: 3px solid var(--color-accent);
+  padding-left: 9px;
 }
 
-.presetHeader {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+.presetRowActive .presetName {
+  color: var(--color-accent);
 }
 
 .presetName {
-  font-size: 0.95rem;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+/* Right column config panel — no card/border/background */
+.presetConfig {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Panel header (preset name + description) */
+.panelHeader {
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeaderName {
+  font-size: 18px;
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.presetBadge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
+.panelHeaderDesc {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* Placeholder state (no preset selected) — spans columns 2–3 */
+.emptyStatePlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: var(--color-text-muted);
+  grid-column: 2 / -1;
+}
+
+.emptyStatePlaceholder svg {
   color: var(--color-text-muted);
 }
 
-.presetDescription {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  line-height: 1.4;
+.emptyStatePlaceholder span {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin-top: 12px;
 }
 
-.presetConfig {
+/* Legacy — kept for safety */
+.placeholderState {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: var(--color-text-muted);
+}
+
+/* Config section (label + chips) */
+.configSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .configLabel {
-  font-size: 0.8rem;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--color-text-secondary);
+  margin-bottom: 0;
 }
 
-.noteGrid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: var(--space-xs);
-}
-
-.noteButton {
-  padding: var(--space-sm) var(--space-xs);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
-  border: 1px solid var(--color-border);
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all var(--transition-fast);
-}
-
-.noteButton:hover {
-  background: var(--color-border);
-}
-
-.noteButtonActive {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: white;
-}
-
-.octaveRow {
+/* Universal chip style */
+.chipRow {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
-  gap: var(--space-md);
 }
 
-.octaveButtons {
-  display: flex;
-  gap: var(--space-xs);
-}
-
-.octaveButton {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
-  border: 1px solid var(--color-border);
-  font-size: 0.85rem;
+.chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  font-size: 13px;
   font-weight: 500;
-  transition: all var(--transition-fast);
-}
-
-.octaveButton:hover {
-  background: var(--color-border);
-}
-
-.octaveButtonActive {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: white;
-}
-
-.shiftRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-}
-
-.shiftButtons {
-  display: flex;
-  gap: var(--space-xs);
-}
-
-.shiftButton {
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
   border: 1px solid var(--color-border);
-  font-size: 0.8rem;
-  font-weight: 500;
-  transition: all var(--transition-fast);
+  background: transparent;
+  color: var(--color-text-primary);
   cursor: pointer;
+  transition: all 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.shiftButton:hover {
-  background: var(--color-border);
+.chip:hover {
+  background: var(--color-surface-hover);
 }
 
-.shiftButtonActive {
+.chipActive {
   background: var(--color-accent);
-  border-color: var(--color-accent);
   color: white;
+  border-color: var(--color-accent);
 }
 
+.chipActive:hover {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+/* Scale category labels (within Scale Type picker) */
+.scaleCategoryGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scaleCategoryLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+/* Toggle row for skip transition */
 .toggleRow {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   cursor: pointer;
-  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--color-text-primary);
 }
 
 .toggleCheckbox {
@@ -189,17 +252,11 @@
   cursor: pointer;
 }
 
-.toggleHint {
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-  width: 100%;
-  padding-left: 28px;
-}
-
+/* Sequence preview */
 .preview {
-  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: var(--space-md);
+  padding: var(--space-sm);
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -234,79 +291,182 @@
   font-size: 0.75rem;
 }
 
+/* Start button */
+.startButton {
+  align-self: stretch;
+  height: 48px;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+
+.startButton:hover {
+  opacity: 0.88;
+}
+
+/* Custom Sequences section */
 .customSection {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  margin-top: 20px;
+}
+
+.customEmptyHint {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
 }
 
 .customList {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
 }
 
-.customItem {
+/* Custom sequence row (44px, same as presets) */
+.customRow {
   display: flex;
   align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+}
+
+.customRow:hover {
+  background: var(--color-surface-hover);
 }
 
 .customItemName {
   flex: 1;
-  font-size: 0.85rem;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-text-primary);
 }
 
 .customItemSteps {
-  font-size: 0.75rem;
+  font-size: 13px;
   color: var(--color-text-muted);
 }
 
-.customItemButton {
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-hover);
+/* Action buttons hidden by default, shown on row hover */
+.customRowActions {
+  display: flex;
+  gap: var(--space-sm);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.customRow:hover .customRowActions {
+  opacity: 1;
+}
+
+.customRowActions button {
+  font-size: 13px;
+  background: none;
+  border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  padding: 2px 4px;
+  transition: color 120ms ease;
 }
 
-.customItemButton:hover {
-  background: var(--color-border);
+.customRowActions button:hover {
+  color: var(--color-text-primary);
 }
 
-.customItemDelete {
+.customRowActions .customItemDelete:hover {
   color: var(--color-incorrect);
-  border-color: transparent;
-  background: transparent;
 }
 
-.customItemDelete:hover {
-  background: var(--color-incorrect-bg);
-}
-
-.createButton {
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  border: 1px dashed var(--color-border);
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.createButton:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-accent);
+/* Create link (plain text accent) */
+.createLink {
   color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.createLink:hover {
+  text-decoration: underline;
+}
+
+/* Scale Preview nav */
+.previewNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.previewNavBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  transition: background 120ms ease;
+  padding: 0;
+}
+
+.previewNavBtn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.previewNavBtn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.previewNavCounter {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  flex: 1;
+  text-align: center;
+}
+
+.previewScaleName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.previewDirection {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.previewMeta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.previewUnavailable {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* Staff notation container — cream background so VexFlow black notation is visible */
+.staffContainer {
+  width: 100%;
+  border-radius: 8px;
+  background: #f7f5f0;
+  border: 1px solid #d4cfc4;
+  padding: var(--space-sm) 0;
+  overflow: hidden;
 }

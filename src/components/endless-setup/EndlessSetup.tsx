@@ -1,46 +1,95 @@
-import { useState, useMemo } from 'react'
-import { PRESETS, PRESET_CATEGORIES, getStepLabel } from '@core/endless/presets.ts'
+import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { PRESETS, PRESET_CATEGORIES, SCALE_NAMES } from '@core/endless/presets.ts'
 import {
   loadCustomSequences,
   saveCustomSequence,
   deleteCustomSequence,
 } from '@core/endless/storage.ts'
 import type { ScaleSequence, SavedCustomSequence } from '@core/endless/types.ts'
-import type { ScaleInfo } from '@core/wasm/types.ts'
+import type { ScaleInfo, ScaleDirection, Note } from '@core/wasm/types.ts'
+import { buildScale } from '@core/wasm/scales.ts'
 import { SequenceBuilder } from './SequenceBuilder.tsx'
+import { StaffPreview } from './StaffPreview.tsx'
 import styles from './EndlessSetup.module.css'
 
 const PITCH_CLASSES = [
   'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
 ] as const
 
+// Default bass starting octave — auto-adjusted by buildScaleNotes to fit range
+const BASS_DEFAULT_OCTAVE = 2
+
+const CATEGORY_ORDER: (keyof typeof PRESET_CATEGORIES)[] = ['basic', 'jazz', 'theory', 'technique']
+
+const SHIFT_OPTIONS = [
+  { label: 'None', value: 0 },
+  { label: '\u00BD Step', value: 1 },
+  { label: 'Whole Step', value: 2 },
+  { label: '4ths', value: 5 },
+  { label: '5ths', value: 7 },
+] as const
+
+function intervalsToFormula(notes: Note[]): string {
+  if (notes.length < 2) return ''
+  const result: string[] = []
+  for (let i = 0; i < notes.length - 1; i++) {
+    const diff = notes[i + 1].midi - notes[i].midi
+    if (diff === 1) result.push('H')
+    else if (diff === 2) result.push('W')
+    else if (diff === 3) result.push('W+H')
+    else result.push(String(diff))
+  }
+  return result.join(' ')
+}
+
 interface EndlessSetupProps {
   availableScales: ScaleInfo[]
   onStartSequence: (sequence: ScaleSequence) => void
+  /** Slot for metronome / advanced settings controls rendered in the config panel */
+  settingsSlot?: ReactNode
 }
 
-export function EndlessSetup({ availableScales, onStartSequence }: EndlessSetupProps) {
+export function EndlessSetup({ availableScales, onStartSequence, settingsSlot }: EndlessSetupProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
   const [presetKey, setPresetKey] = useState('C')
-  const [presetOctave, setPresetOctave] = useState(2)
+  const [numOctaves, setNumOctaves] = useState(1)
   const [shiftSemitones, setShiftSemitones] = useState(0)
-  const [skipTransition, setSkipTransition] = useState(false)
+  const [skipTransition, setSkipTransition] = useState(() => {
+    try { return localStorage.getItem('practicebuddy:skipTransition') === 'true' } catch { return false }
+  })
+  const [basicScaleTypeIndex, setBasicScaleTypeIndex] = useState(0)
+  const [basicDirection, setBasicDirection] = useState<ScaleDirection>('ascending')
   const [customSequences, setCustomSequences] = useState<SavedCustomSequence[]>(
     loadCustomSequences
   )
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingSequence, setEditingSequence] = useState<SavedCustomSequence | undefined>()
+  const [previewStepIndex, setPreviewStepIndex] = useState(0)
+
+  useEffect(() => {
+    localStorage.setItem('practicebuddy:skipTransition', String(skipTransition))
+  }, [skipTransition])
+
+  useEffect(() => { setPreviewStepIndex(0) }, [selectedPresetId, presetKey, basicScaleTypeIndex])
 
   const selectedPreset = PRESETS.find((p) => p.id === selectedPresetId)
+  const isBasicPreset = selectedPreset?.category === 'basic'
 
   const generatedSequence = useMemo(() => {
     if (!selectedPreset) return null
-    return selectedPreset.generate(presetKey, presetOctave)
-  }, [selectedPreset, presetKey, presetOctave])
+    return selectedPreset.generate(presetKey, BASS_DEFAULT_OCTAVE, isBasicPreset ? basicScaleTypeIndex : undefined)
+  }, [selectedPreset, presetKey, isBasicPreset, basicScaleTypeIndex])
 
   const handleStartPreset = () => {
     if (generatedSequence) {
-      onStartSequence({ ...generatedSequence, shiftSemitones, skipTransition })
+      const direction = isBasicPreset ? basicDirection : generatedSequence.direction
+      onStartSequence({
+        ...generatedSequence,
+        direction,
+        shiftSemitones,
+        skipTransition,
+        numOctaves,
+      })
     }
   }
 
@@ -53,6 +102,7 @@ export function EndlessSetup({ availableScales, onStartSequence }: EndlessSetupP
       direction: saved.direction,
       shiftSemitones: saved.shiftSemitones,
       skipTransition: saved.skipTransition,
+      numOctaves,
     }
     onStartSequence(seq)
   }
@@ -74,6 +124,55 @@ export function EndlessSetup({ availableScales, onStartSequence }: EndlessSetupP
     setShowBuilder(true)
   }
 
+  // Group presets by category
+  const presetsByCategory = useMemo(() => {
+    const grouped: Record<string, typeof PRESETS> = {}
+    for (const preset of PRESETS) {
+      if (!grouped[preset.category]) grouped[preset.category] = []
+      grouped[preset.category].push(preset)
+    }
+    return grouped
+  }, [])
+
+  // Group available scales by category for the basic preset picker
+  const scalesByCategory = useMemo(() => {
+    return availableScales.reduce<Record<string, { info: ScaleInfo; index: number }[]>>(
+      (acc, scale, i) => {
+        const cat = scale.category
+        if (!acc[cat]) acc[cat] = []
+        acc[cat].push({ info: scale, index: i })
+        return acc
+      },
+      {}
+    )
+  }, [availableScales])
+
+  // Compute preview notes so both columns can use them (must be above early return)
+  const previewStep = useMemo(() => {
+    if (!generatedSequence) return null
+    return generatedSequence.steps[previewStepIndex] ?? generatedSequence.steps[0]
+  }, [generatedSequence, previewStepIndex])
+
+  const previewNotes = useMemo(() => {
+    if (!previewStep) return []
+    const rootStr = `${previewStep.rootNote}${previewStep.rootOctave}`
+    try {
+      const notes = buildScale(rootStr, previewStep.scaleTypeIndex, 'ascending')
+      return notes ?? []
+    } catch (err) {
+      console.error('Scale preview buildScale failed:', rootStr, previewStep.scaleTypeIndex, err)
+      return []
+    }
+  }, [previewStep])
+
+  const categoryLabels: Record<string, string> = {
+    common: 'Common',
+    pentatonic: 'Pentatonic',
+    blues: 'Blues',
+    modes: 'Modes',
+    jazz: 'Jazz',
+  }
+
   if (showBuilder) {
     return (
       <SequenceBuilder
@@ -91,187 +190,287 @@ export function EndlessSetup({ availableScales, onStartSequence }: EndlessSetupP
   }
 
   return (
-    <div className={styles.container}>
-      {/* Presets */}
-      <section>
-        <h3 className={styles.sectionTitle}>Presets</h3>
-        <div className={styles.presetList}>
-          {PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              className={`${styles.presetCard} ${selectedPresetId === preset.id ? styles.presetCardActive : ''}`}
-              onClick={() => {
-                if (selectedPresetId === preset.id) {
-                  setSelectedPresetId(null)
-                } else {
-                  setSelectedPresetId(preset.id)
-                  // Initialize shift from preset default
-                  const seq = preset.generate(presetKey, presetOctave)
-                  setShiftSemitones(seq.shiftSemitones ?? 0)
-                }
-              }}
-            >
-              <div className={styles.presetHeader}>
-                <span className={styles.presetName}>{preset.name}</span>
-                <span className={styles.presetBadge}>
-                  {PRESET_CATEGORIES[preset.category]}
+    <div className={styles.threeColumnLayout}>
+      {/* Column 1: preset list + custom sequences */}
+      <div className={styles.leftColumn}>
+        <section>
+          <h3 className={styles.sectionTitle}>Presets</h3>
+          {CATEGORY_ORDER.map((category) => {
+            const presets = presetsByCategory[category]
+            if (!presets || presets.length === 0) return null
+            return (
+              <div key={category} className={styles.categoryGroup}>
+                <span className={styles.categoryHeader}>
+                  {PRESET_CATEGORIES[category]}
                 </span>
-              </div>
-              <span className={styles.presetDescription}>
-                {preset.description}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Preset configuration */}
-      {selectedPreset && selectedPreset.transposable && (
-        <div className={styles.presetConfig}>
-          <span className={styles.configLabel}>Key</span>
-          <div className={styles.noteGrid}>
-            {PITCH_CLASSES.map((pc) => (
-              <button
-                key={pc}
-                className={`${styles.noteButton} ${presetKey === pc ? styles.noteButtonActive : ''}`}
-                onClick={() => setPresetKey(pc)}
-              >
-                {pc}
-              </button>
-            ))}
-          </div>
-          <div className={styles.octaveRow}>
-            <span className={styles.configLabel}>Octave</span>
-            <div className={styles.octaveButtons}>
-              {[1, 2, 3, 4].map((oct) => (
-                <button
-                  key={oct}
-                  className={`${styles.octaveButton} ${presetOctave === oct ? styles.octaveButtonActive : ''}`}
-                  onClick={() => setPresetOctave(oct)}
-                >
-                  {oct}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={styles.shiftRow}>
-            <span className={styles.configLabel}>Loop Shift</span>
-            <div className={styles.shiftButtons}>
-              {([
-                { label: 'None', value: 0 },
-                { label: 'Half Step', value: 1 },
-                { label: 'Whole Step', value: 2 },
-                { label: 'Circle of 5ths', value: 7 },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  className={`${styles.shiftButton} ${shiftSemitones === opt.value ? styles.shiftButtonActive : ''}`}
-                  onClick={() => setShiftSemitones(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={styles.shiftRow}>
-            <label className={styles.toggleRow}>
-              <input
-                type="checkbox"
-                checked={skipTransition}
-                onChange={(e) => setSkipTransition(e.target.checked)}
-                className={styles.toggleCheckbox}
-              />
-              <span className={styles.configLabel}>Skip transition screen</span>
-              <span className={styles.toggleHint}>Connect scales without pausing</span>
-            </label>
-          </div>
-
-          {/* Sequence preview */}
-          {generatedSequence && (
-            <div className={styles.preview}>
-              <span className={styles.previewTitle}>Sequence</span>
-              <div className={styles.previewSteps}>
-                {generatedSequence.steps.map((step, i) => (
-                  <span key={i}>
-                    {i > 0 && <span className={styles.previewArrow}> → </span>}
-                    <span className={styles.previewStep}>
-                      {getStepLabel(step)}
-                    </span>
-                  </span>
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    className={`${styles.presetRow} ${selectedPresetId === preset.id ? styles.presetRowActive : ''}`}
+                    onClick={() => {
+                      if (selectedPresetId === preset.id) {
+                        setSelectedPresetId(null)
+                      } else {
+                        setSelectedPresetId(preset.id)
+                        const seq = preset.generate(presetKey, BASS_DEFAULT_OCTAVE)
+                        setShiftSemitones(seq.shiftSemitones ?? 0)
+                      }
+                    }}
+                  >
+                    <span className={styles.presetName}>{preset.name}</span>
+                  </button>
                 ))}
               </div>
-              {shiftSemitones > 0 && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                  Shifts by {shiftSemitones === 1 ? 'half step' : shiftSemitones === 2 ? 'whole step' : shiftSemitones === 7 ? 'circle of 5ths' : `${shiftSemitones} semitones`} each loop
-                </span>
-              )}
+            )
+          })}
+        </section>
+
+        {/* Custom Sequences */}
+        <section className={styles.customSection}>
+          <h3 className={styles.sectionTitle}>Custom Sequences</h3>
+          {customSequences.length === 0 && (
+            <p className={styles.customEmptyHint}>
+              Build your own practice routine
+            </p>
+          )}
+          {customSequences.length > 0 && (
+            <div className={styles.customList}>
+              {customSequences.map((seq) => (
+                <div key={seq.id} className={styles.customRow}>
+                  <span className={styles.customItemName}>{seq.name}</span>
+                  <span className={styles.customItemSteps}>
+                    {seq.steps.length} scales
+                  </span>
+                  <div className={styles.customRowActions}>
+                    <button onClick={() => handleStartCustom(seq)}>Start</button>
+                    <button onClick={() => handleEditCustom(seq)}>Edit</button>
+                    <button
+                      className={styles.customItemDelete}
+                      onClick={() => handleDeleteCustom(seq.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-
           <button
-            onClick={handleStartPreset}
-            style={{
-              padding: 'var(--space-md) var(--space-xl)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-accent)',
-              color: 'white',
-              fontSize: '1rem',
-              fontWeight: 700,
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 150ms ease',
+            className={styles.createLink}
+            onClick={() => {
+              setEditingSequence(undefined)
+              setShowBuilder(true)
             }}
           >
-            Start Endless Practice
+            + Create Custom Sequence
           </button>
+        </section>
+      </div>
+
+      {/* Columns 2–3: placeholder or config+preview */}
+      {!selectedPreset && (
+        <div className={styles.emptyStatePlaceholder}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <span>Select a preset to get started</span>
         </div>
       )}
 
-      {/* Custom Sequences */}
-      <section className={styles.customSection}>
-        <h3 className={styles.sectionTitle}>Custom Sequences</h3>
-        {customSequences.length > 0 && (
-          <div className={styles.customList}>
-            {customSequences.map((seq) => (
-              <div key={seq.id} className={styles.customItem}>
-                <span className={styles.customItemName}>{seq.name}</span>
-                <span className={styles.customItemSteps}>
-                  {seq.steps.length} scales
-                </span>
-                <button
-                  className={styles.customItemButton}
-                  onClick={() => handleStartCustom(seq)}
-                >
-                  Start
-                </button>
-                <button
-                  className={styles.customItemButton}
-                  onClick={() => handleEditCustom(seq)}
-                >
-                  Edit
-                </button>
-                <button
-                  className={`${styles.customItemButton} ${styles.customItemDelete}`}
-                  onClick={() => handleDeleteCustom(seq.id)}
-                >
-                  Delete
-                </button>
+      {/* Column 2: config panel */}
+      {selectedPreset && <div className={styles.middleColumn}>
+        {selectedPreset.transposable && (
+          <div className={styles.presetConfig}>
+            {/* Preset header */}
+            <div className={styles.panelHeader}>
+              <span className={styles.panelHeaderName}>{selectedPreset.name}</span>
+              <span className={styles.panelHeaderDesc}>{selectedPreset.description}</span>
+            </div>
+
+            {/* Root Note */}
+            <div className={styles.configSection}>
+              <span className={styles.configLabel}>Root Note</span>
+              <div className={styles.chipRow}>
+                {PITCH_CLASSES.map((pc) => (
+                  <button
+                    key={pc}
+                    className={`${styles.chip} ${presetKey === pc ? styles.chipActive : ''}`}
+                    onClick={() => setPresetKey(pc)}
+                  >
+                    {pc}
+                  </button>
+                ))}
               </div>
-            ))}
+            </div>
+
+            {/* Octaves */}
+            <div className={styles.configSection}>
+              <span className={styles.configLabel}>Octaves</span>
+              <div className={styles.chipRow}>
+                {[1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    className={`${styles.chip} ${numOctaves === n ? styles.chipActive : ''}`}
+                    onClick={() => setNumOctaves(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Basic preset: scale type + direction pickers */}
+            {isBasicPreset && (
+              <>
+                <div className={styles.configSection}>
+                  <span className={styles.configLabel}>Scale Type</span>
+                  {Object.entries(scalesByCategory).map(([category, scales]) => (
+                    <div key={category} className={styles.scaleCategoryGroup}>
+                      <span className={styles.scaleCategoryLabel}>
+                        {categoryLabels[category] ?? category}
+                      </span>
+                      <div className={styles.chipRow}>
+                        {scales.map(({ info, index }) => (
+                          <button
+                            key={index}
+                            className={`${styles.chip} ${basicScaleTypeIndex === index ? styles.chipActive : ''}`}
+                            onClick={() => setBasicScaleTypeIndex(index)}
+                          >
+                            {info.displayName}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className={styles.configSection}>
+                  <span className={styles.configLabel}>Direction</span>
+                  <div className={styles.chipRow}>
+                    {(['ascending', 'descending', 'both'] as ScaleDirection[]).map((dir) => (
+                      <button
+                        key={dir}
+                        className={`${styles.chip} ${basicDirection === dir ? styles.chipActive : ''}`}
+                        onClick={() => setBasicDirection(dir)}
+                      >
+                        {dir === 'ascending' ? '\u2191 Up' : dir === 'descending' ? '\u2193 Down' : '\u2195 Both'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Loop Shift */}
+            <div className={styles.configSection}>
+              <span className={styles.configLabel}>Loop Shift</span>
+              <div className={styles.chipRow}>
+                {SHIFT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`${styles.chip} ${shiftSemitones === opt.value ? styles.chipActive : ''}`}
+                    onClick={() => setShiftSemitones(opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Non-basic presets: skip transition */}
+            {!isBasicPreset && (
+              <label className={styles.toggleRow}>
+                <input
+                  type="checkbox"
+                  checked={skipTransition}
+                  onChange={(e) => setSkipTransition(e.target.checked)}
+                  className={styles.toggleCheckbox}
+                />
+                Skip transition screen
+              </label>
+            )}
+
+            {/* Metronome / advanced settings slot */}
+            {settingsSlot}
+
+            <button
+              className={styles.startButton}
+              onClick={handleStartPreset}
+            >
+              Start Practice
+            </button>
           </div>
         )}
-        <button
-          className={styles.createButton}
-          onClick={() => {
-            setEditingSequence(undefined)
-            setShowBuilder(true)
-          }}
-        >
-          + Create Custom Sequence
-        </button>
-      </section>
+      </div>}
+
+      {/* Column 3: scale preview */}
+      {selectedPreset && (
+      <div className={styles.previewColumn}>
+        {selectedPreset && previewStep && (
+          <>
+            <span className={styles.configLabel}>Scale Preview</span>
+
+            {/* Step navigation — always visible when multiple steps, regardless of note load state */}
+            {generatedSequence && generatedSequence.steps.length > 1 && (
+              <div className={styles.previewNav}>
+                <button
+                  type="button"
+                  className={styles.previewNavBtn}
+                  onClick={() => setPreviewStepIndex(i => Math.max(0, i - 1))}
+                  disabled={previewStepIndex === 0}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <span className={styles.previewNavCounter}>
+                  Step {previewStepIndex + 1} of {generatedSequence.steps.length}
+                </span>
+                <button
+                  type="button"
+                  className={styles.previewNavBtn}
+                  onClick={() => setPreviewStepIndex(i => Math.min(generatedSequence.steps.length - 1, i + 1))}
+                  disabled={previewStepIndex === generatedSequence.steps.length - 1}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+            )}
+
+            {/* Scale name + direction — always visible */}
+            <span className={styles.previewScaleName}>
+              {previewStep.label ?? `${previewStep.rootNote} ${SCALE_NAMES[previewStep.scaleTypeIndex] ?? 'Scale'}`}
+            </span>
+            <span className={styles.previewDirection}>
+              {(isBasicPreset ? basicDirection : generatedSequence?.direction ?? 'ascending') === 'ascending'
+                ? '\u2191 Ascending'
+                : (isBasicPreset ? basicDirection : generatedSequence?.direction ?? 'ascending') === 'descending'
+                ? '\u2193 Descending'
+                : '\u2195 Both directions'}
+            </span>
+
+            {/* Staff — only when notes available */}
+            {previewNotes.length > 0 ? (
+              <>
+                <div className={styles.staffContainer}>
+                  <StaffPreview
+                    notes={previewNotes}
+                    scaleName={previewStep.label ?? `${previewStep.rootNote} ${SCALE_NAMES[previewStep.scaleTypeIndex] ?? 'Scale'}`}
+                    rootPitchClass={previewStep.rootNote}
+                    scaleTypeIndex={previewStep.scaleTypeIndex}
+                  />
+                </div>
+                <span className={styles.previewMeta}>
+                  {previewNotes.length} notes &middot; {intervalsToFormula(previewNotes)}
+                </span>
+              </>
+            ) : (
+              <span className={styles.previewUnavailable}>Preview unavailable</span>
+            )}
+          </>
+        )}
+      </div>
+      )}
     </div>
   )
 }

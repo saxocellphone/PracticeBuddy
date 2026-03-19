@@ -22,10 +22,16 @@ const SCALE = {
   MajorPentatonic: 9,
   MinorPentatonic: 10,
   Blues: 11,
+  LydianDominant: 12,
+  Altered: 13,
+  LocrianNatural2: 14,
+  HalfWholeDiminished: 15,
+  WholeTone: 16,
+  BebopDominant: 17,
 } as const
 
 /** Scale type display names */
-const SCALE_NAMES: Record<number, string> = {
+export const SCALE_NAMES: Record<number, string> = {
   [SCALE.Major]: 'Major',
   [SCALE.NaturalMinor]: 'Natural Minor',
   [SCALE.HarmonicMinor]: 'Harmonic Minor',
@@ -38,6 +44,12 @@ const SCALE_NAMES: Record<number, string> = {
   [SCALE.MajorPentatonic]: 'Maj Pentatonic',
   [SCALE.MinorPentatonic]: 'Min Pentatonic',
   [SCALE.Blues]: 'Blues',
+  [SCALE.LydianDominant]: 'Lydian Dominant',
+  [SCALE.Altered]: 'Altered',
+  [SCALE.LocrianNatural2]: 'Locrian \u266e2',
+  [SCALE.HalfWholeDiminished]: 'Half-Whole Dim.',
+  [SCALE.WholeTone]: 'Whole Tone',
+  [SCALE.BebopDominant]: 'Bebop Dominant',
 }
 
 /**
@@ -114,7 +126,8 @@ const jazzIIVI: PresetTemplate = {
       name: `Jazz ii-V-I in ${rootNote}`,
       description: `ii-V-I progression in the key of ${rootNote}`,
       direction: 'ascending',
-      shiftSemitones: 7,
+      shiftSemitones: 5,
+      skipTransition: true,
       steps: [
         makeStep(rootNote, rootOctave, 2, SCALE.Dorian, undefined),
         makeStep(rootNote, rootOctave, 7, SCALE.Mixolydian, undefined),
@@ -213,15 +226,204 @@ const pentatonicPairs: PresetTemplate = {
   },
 }
 
+const basicScale: PresetTemplate = {
+  id: 'basic-scale',
+  name: 'Basic Scale',
+  description: 'Practice a single scale. Pick your root note, scale type, and direction.',
+  category: 'basic',
+  transposable: true,
+  generate(rootNote, rootOctave, scaleTypeIndex = SCALE.Major): ScaleSequence {
+    const scaleName = SCALE_NAMES[scaleTypeIndex] ?? 'Scale'
+    return {
+      id: 'basic-scale',
+      name: `${rootNote} ${scaleName}`,
+      description: `${rootNote} ${scaleName} scale`,
+      direction: 'ascending',
+      shiftSemitones: 0,
+      steps: [makeStep(rootNote, rootOctave, 0, scaleTypeIndex)],
+    }
+  },
+}
+
+const diatonicModalContext: PresetTemplate = {
+  id: 'diatonic-modal-context',
+  name: 'Diatonic Modal Context',
+  description: 'Practice all 7 modes on their correct diatonic roots. More musical than same-root mode drills.',
+  category: 'theory',
+  transposable: true,
+  generate(rootNote, rootOctave): ScaleSequence {
+    return {
+      id: 'diatonic-modal-context',
+      name: `Diatonic Modes from ${rootNote}`,
+      description: 'All 7 modes on their correct diatonic roots',
+      direction: 'ascending',
+      shiftSemitones: 5,
+      skipTransition: true,
+      steps: [
+        makeStep(rootNote, rootOctave, 0, SCALE.Major),
+        makeStep(rootNote, rootOctave, 2, SCALE.Dorian),
+        makeStep(rootNote, rootOctave, 4, SCALE.Phrygian),
+        makeStep(rootNote, rootOctave, 5, SCALE.Lydian),
+        makeStep(rootNote, rootOctave, 7, SCALE.Mixolydian),
+        makeStep(rootNote, rootOctave, 9, SCALE.NaturalMinor),
+        makeStep(rootNote, rootOctave, 11, SCALE.Locrian),
+      ],
+    }
+  },
+}
+
+const bluesAllKeys: PresetTemplate = {
+  id: 'blues-all-keys',
+  name: 'Blues in All 12 Keys',
+  description: 'Blues scale through all 12 keys via the cycle of fourths.',
+  category: 'jazz',
+  transposable: true,
+  generate(rootNote, rootOctave): ScaleSequence {
+    return {
+      id: 'blues-all-keys',
+      name: `Blues from ${rootNote}`,
+      description: `Blues scale starting from ${rootNote}`,
+      direction: 'ascending',
+      shiftSemitones: 5,
+      skipTransition: true,
+      steps: [makeStep(rootNote, rootOctave, 0, SCALE.Blues)],
+    }
+  },
+}
+
+const jazzIIVIAltered: PresetTemplate = {
+  id: 'jazz-ii-v-i-altered',
+  name: 'Jazz ii-V-I (Altered)',
+  description: 'ii-V-I with the altered scale on the V7 \u2014 the modern jazz sound.',
+  category: 'jazz',
+  transposable: true,
+  generate(rootNote, rootOctave): ScaleSequence {
+    return {
+      id: 'jazz-ii-v-i-altered',
+      name: `Jazz ii-V-I Altered in ${rootNote}`,
+      description: `ii-V-I with altered dominant in the key of ${rootNote}`,
+      direction: 'ascending',
+      shiftSemitones: 5,
+      skipTransition: true,
+      steps: [
+        makeStep(rootNote, rootOctave, 2, SCALE.Dorian),
+        makeStep(rootNote, rootOctave, 7, SCALE.Altered),
+        makeStep(rootNote, rootOctave, 0, SCALE.Major),
+      ],
+    }
+  },
+}
+
+const jazzMinorIIVI: PresetTemplate = {
+  id: 'jazz-minor-ii-v-i',
+  name: 'Minor ii-V-i',
+  description: 'The minor ii-V-i: half-diminished ii, altered V, minor i. Essential for minor key standards.',
+  category: 'jazz',
+  transposable: true,
+  generate(rootNote, rootOctave): ScaleSequence {
+    return {
+      id: 'jazz-minor-ii-v-i',
+      name: `Minor ii-V-i in ${rootNote}`,
+      description: `Minor ii-V-i in the key of ${rootNote}`,
+      direction: 'ascending',
+      shiftSemitones: 5,
+      skipTransition: true,
+      steps: [
+        makeStep(rootNote, rootOctave, 2, SCALE.LocrianNatural2),
+        makeStep(rootNote, rootOctave, 7, SCALE.Altered),
+        makeStep(rootNote, rootOctave, 0, SCALE.NaturalMinor),
+      ],
+    }
+  },
+}
+
+const dominantWorkout: PresetTemplate = {
+  id: 'dominant-workout',
+  name: 'Dominant Workout',
+  description: 'Three dominant colors back to back: basic (Mixolydian), bebop (Half-Whole Dim.), modern (Altered).',
+  category: 'jazz',
+  transposable: true,
+  generate(rootNote, rootOctave): ScaleSequence {
+    return {
+      id: 'dominant-workout',
+      name: `Dominant Workout from ${rootNote}`,
+      description: 'Three dominant scale colors',
+      direction: 'ascending',
+      shiftSemitones: 5,
+      skipTransition: true,
+      steps: [
+        makeStep(rootNote, rootOctave, 7, SCALE.Mixolydian),
+        makeStep(rootNote, rootOctave, 7, SCALE.HalfWholeDiminished),
+        makeStep(rootNote, rootOctave, 7, SCALE.Altered),
+      ],
+    }
+  },
+}
+
+const tritonePair: PresetTemplate = {
+  id: 'tritone-pair',
+  name: 'Tritone Pair',
+  description: 'Lydian Dominant and its tritone substitute \u2014 both work over the same dominant chord.',
+  category: 'jazz',
+  transposable: true,
+  generate(rootNote, rootOctave): ScaleSequence {
+    return {
+      id: 'tritone-pair',
+      name: `Tritone Pair from ${rootNote}`,
+      description: 'Lydian Dominant and its tritone substitute',
+      direction: 'ascending',
+      shiftSemitones: 5,
+      skipTransition: true,
+      steps: [
+        makeStep(rootNote, rootOctave, 0, SCALE.LydianDominant),
+        makeStep(rootNote, rootOctave, 6, SCALE.LydianDominant),
+      ],
+    }
+  },
+}
+
+const chordScaleWorkout: PresetTemplate = {
+  id: 'chord-scale-workout',
+  name: 'Chord-Scale Workout',
+  description: 'Four chord qualities, four scales: maj7 (Lydian), dom7 (Lyd. Dom.), min7 (Dorian), min7b5 (Locrian \u266e2).',
+  category: 'jazz',
+  transposable: true,
+  generate(rootNote, rootOctave): ScaleSequence {
+    return {
+      id: 'chord-scale-workout',
+      name: `Chord-Scale Workout from ${rootNote}`,
+      description: 'Four chord qualities, four scales',
+      direction: 'ascending',
+      shiftSemitones: 5,
+      skipTransition: true,
+      steps: [
+        makeStep(rootNote, rootOctave, 0, SCALE.Lydian),
+        makeStep(rootNote, rootOctave, 0, SCALE.LydianDominant),
+        makeStep(rootNote, rootOctave, 0, SCALE.Dorian),
+        makeStep(rootNote, rootOctave, 0, SCALE.LocrianNatural2),
+      ],
+    }
+  },
+}
+
 export const PRESETS: PresetTemplate[] = [
+  basicScale,
   jazzIIVI,
+  jazzIIVIAltered,
+  jazzMinorIIVI,
+  bluesAllKeys,
+  dominantWorkout,
+  tritonePair,
+  chordScaleWorkout,
   circleOfFifthsMajor,
+  diatonicModalContext,
   relativeMajorMinor,
   modeWorkout,
   pentatonicPairs,
 ]
 
 export const PRESET_CATEGORIES = {
+  basic: 'Basic',
   jazz: 'Jazz',
   theory: 'Theory',
   technique: 'Technique',

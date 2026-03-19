@@ -18,6 +18,14 @@ pub enum ScaleType {
     MajorPentatonic,
     MinorPentatonic,
     Blues,
+    // Jazz scales (Phase 2)
+    LydianDominant,
+    Altered,
+    LocrianNatural2,
+    // Jazz scales (Phase 3)
+    HalfWholeDiminished,
+    WholeTone,
+    BebopDominant,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -43,6 +51,12 @@ impl ScaleType {
             ScaleType::MajorPentatonic => &[2, 2, 3, 2, 3],
             ScaleType::MinorPentatonic => &[3, 2, 2, 3, 2],
             ScaleType::Blues => &[3, 2, 1, 1, 3, 2],
+            ScaleType::LydianDominant => &[2, 2, 2, 1, 2, 1, 2],
+            ScaleType::Altered => &[1, 2, 1, 2, 2, 2, 2],
+            ScaleType::LocrianNatural2 => &[2, 1, 2, 1, 2, 2, 2],
+            ScaleType::HalfWholeDiminished => &[1, 2, 1, 2, 1, 2, 1, 2],
+            ScaleType::WholeTone => &[2, 2, 2, 2, 2, 2],
+            ScaleType::BebopDominant => &[2, 2, 1, 2, 2, 1, 1, 1],
         }
     }
 
@@ -60,6 +74,12 @@ impl ScaleType {
             ScaleType::MajorPentatonic => "Major Pentatonic",
             ScaleType::MinorPentatonic => "Minor Pentatonic",
             ScaleType::Blues => "Blues",
+            ScaleType::LydianDominant => "Lydian Dominant",
+            ScaleType::Altered => "Altered",
+            ScaleType::LocrianNatural2 => "Locrian \u{266e}2",
+            ScaleType::HalfWholeDiminished => "Half-Whole Dim.",
+            ScaleType::WholeTone => "Whole Tone",
+            ScaleType::BebopDominant => "Bebop Dominant",
         }
     }
 
@@ -69,6 +89,12 @@ impl ScaleType {
             ScaleType::Dorian | ScaleType::Phrygian | ScaleType::Lydian | ScaleType::Mixolydian | ScaleType::Locrian => "modes",
             ScaleType::MajorPentatonic | ScaleType::MinorPentatonic => "pentatonic",
             ScaleType::Blues => "blues",
+            ScaleType::LydianDominant
+            | ScaleType::Altered
+            | ScaleType::LocrianNatural2
+            | ScaleType::HalfWholeDiminished
+            | ScaleType::WholeTone
+            | ScaleType::BebopDominant => "jazz",
         }
     }
 
@@ -86,6 +112,12 @@ impl ScaleType {
             ScaleType::MajorPentatonic,
             ScaleType::MinorPentatonic,
             ScaleType::Blues,
+            ScaleType::LydianDominant,
+            ScaleType::Altered,
+            ScaleType::LocrianNatural2,
+            ScaleType::HalfWholeDiminished,
+            ScaleType::WholeTone,
+            ScaleType::BebopDominant,
         ]
     }
 }
@@ -224,7 +256,49 @@ mod tests {
     #[test]
     fn test_list_all_scale_types() {
         let all = ScaleType::all();
-        assert_eq!(all.len(), 12);
+        assert_eq!(all.len(), 18);
+    }
+
+    #[test]
+    fn test_c_lydian_dominant() {
+        let notes = build_scale_internal("C4", ScaleType::LydianDominant, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["C4", "D4", "E4", "F#4", "G4", "A4", "A#4", "C5"]);
+    }
+
+    #[test]
+    fn test_c_altered() {
+        let notes = build_scale_internal("C4", ScaleType::Altered, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["C4", "C#4", "D#4", "E4", "F#4", "G#4", "A#4", "C5"]);
+    }
+
+    #[test]
+    fn test_c_locrian_natural2() {
+        let notes = build_scale_internal("C4", ScaleType::LocrianNatural2, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["C4", "D4", "D#4", "F4", "F#4", "G#4", "A#4", "C5"]);
+    }
+
+    #[test]
+    fn test_c_half_whole_diminished() {
+        let notes = build_scale_internal("C4", ScaleType::HalfWholeDiminished, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["C4", "C#4", "D#4", "E4", "F#4", "G4", "A4", "A#4", "C5"]);
+    }
+
+    #[test]
+    fn test_c_whole_tone() {
+        let notes = build_scale_internal("C4", ScaleType::WholeTone, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["C4", "D4", "E4", "F#4", "G#4", "A#4", "C5"]);
+    }
+
+    #[test]
+    fn test_c_bebop_dominant() {
+        let notes = build_scale_internal("C4", ScaleType::BebopDominant, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["C4", "D4", "E4", "F4", "G4", "A4", "A#4", "B4", "C5"]);
     }
 
     #[test]

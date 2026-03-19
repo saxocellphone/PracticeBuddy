@@ -13,6 +13,27 @@
   background: var(--color-surface);
 }
 
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  min-height: 44px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.backButton:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+}
+
 .title {
   font-size: 1.25rem;
   font-weight: 700;
@@ -34,6 +55,15 @@
   color: white;
   padding: 2px 8px;
   border-radius: var(--radius-full);
+}
+
+.titleClickable {
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.titleClickable:hover {
+  opacity: 0.75;
 }
 
 .main {

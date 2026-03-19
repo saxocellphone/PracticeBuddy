@@ -20,6 +20,8 @@ export interface ScaleSequence {
   shiftSemitones?: number
   /** When true, skip the transition screen between scales and go straight to the next. */
   skipTransition?: boolean
+  /** Number of octaves to play (1-3). Defaults to 1. */
+  numOctaves?: number
 }
 
 /** A preset template that generates a ScaleSequence for a given key */
@@ -27,9 +29,9 @@ export interface PresetTemplate {
   id: string
   name: string
   description: string
-  category: 'jazz' | 'theory' | 'technique'
+  category: 'basic' | 'jazz' | 'theory' | 'technique'
   transposable: boolean
-  generate: (rootNote: string, rootOctave: number) => ScaleSequence
+  generate: (rootNote: string, rootOctave: number, scaleTypeIndex?: number) => ScaleSequence
 }
 
 /** Score for a single completed scale within an endless run */

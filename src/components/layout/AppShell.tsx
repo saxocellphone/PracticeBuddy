@@ -1,11 +1,25 @@
 import type { ReactNode } from 'react'
 import styles from './AppShell.module.css'
 
-export function AppShell({ children }: { children: ReactNode }) {
+interface AppShellProps {
+  children: ReactNode
+  onGoHome?: () => void
+  onBack?: () => void
+}
+
+export function AppShell({ children, onGoHome, onBack }: AppShellProps) {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        <h1 className={styles.title}>
+        {onBack && (
+          <button className={styles.backButton} onClick={onBack}>
+            &larr; Home
+          </button>
+        )}
+        <h1
+          className={`${styles.title} ${onGoHome ? styles.titleClickable : ''}`}
+          onClick={onGoHome}
+        >
           <span className={styles.icon}>🎸</span>
           PracticeBuddy
         </h1>
