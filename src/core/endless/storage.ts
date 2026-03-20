@@ -1,4 +1,4 @@
-import type { SavedCustomSequence, ScaleStep } from './types.ts'
+import type { SavedCustomSequence } from './types.ts'
 
 const STORAGE_KEY = 'practicebuddy:custom-sequences'
 

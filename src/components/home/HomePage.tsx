@@ -1,6 +1,6 @@
 import styles from './HomePage.module.css'
 
-export type PracticeMode = 'scales'
+export type PracticeMode = 'scales' | 'rhythm'
 
 interface ModeOption {
   id: string
@@ -22,12 +22,20 @@ const MODES: ModeOption[] = [
     iconBg: 'rgba(99, 102, 241, 0.1)',
   },
   {
+    id: 'rhythm',
+    title: 'Rhythm Mode',
+    description: 'Play notes in time with the metronome. Scored on both pitch accuracy and timing.',
+    icon: '🥁',
+    accentColor: 'var(--color-warning)',
+    iconBg: 'rgba(245, 158, 11, 0.1)',
+  },
+  {
     id: 'jazz-standards',
     title: 'Jazz Standards',
     description: 'Practice chord changes and common jazz progressions.',
     icon: '🎷',
-    accentColor: 'var(--color-warning)',
-    iconBg: 'rgba(245, 158, 11, 0.1)',
+    accentColor: 'rgba(16, 185, 129, 1)',
+    iconBg: 'rgba(16, 185, 129, 0.1)',
     disabled: true,
   },
 ]

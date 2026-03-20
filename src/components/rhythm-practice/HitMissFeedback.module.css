@@ -1,0 +1,269 @@
+/* OSU-style hit/miss feedback animations */
+
+.feedbackContainer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* ---- Hit Effects (Perfect / Good) ---- */
+
+/* Expanding ring burst */
+.hitRing {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid;
+  will-change: transform, opacity;
+  animation: hitRingExpand 500ms ease-out forwards;
+}
+
+.hitRing_perfect {
+  border-color: #4ade80;
+}
+
+.hitRing_good {
+  border-color: #22d3ee;
+}
+
+.hitRingOuter {
+  animation-delay: 60ms;
+  opacity: 0.6;
+}
+
+@keyframes hitRingExpand {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Flash burst behind the note */
+.hitFlash {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  will-change: transform, opacity;
+  animation: hitFlash 350ms ease-out forwards;
+}
+
+.hitFlash_perfect {
+  background: radial-gradient(circle, rgba(74, 222, 128, 0.5) 0%, transparent 70%);
+}
+
+.hitFlash_good {
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.4) 0%, rgba(34, 211, 238, 0) 70%);
+}
+
+@keyframes hitFlash {
+  0% {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* Particle sparks */
+.hitParticle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  will-change: transform, opacity;
+  animation: hitParticle 450ms ease-out forwards;
+}
+
+.hitParticle_perfect {
+  background: #86efac;
+}
+
+.hitParticle_good {
+  background: #67e8f9;
+}
+
+.hitParticle:nth-child(3) {
+  animation-delay: 30ms;
+}
+.hitParticle:nth-child(4) {
+  animation-delay: 60ms;
+}
+.hitParticle:nth-child(5) {
+  animation-delay: 20ms;
+}
+.hitParticle:nth-child(6) {
+  animation-delay: 50ms;
+}
+.hitParticle:nth-child(7) {
+  animation-delay: 40ms;
+}
+.hitParticle:nth-child(8) {
+  animation-delay: 70ms;
+}
+
+@keyframes hitParticle {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Score label pop */
+.hitLabel {
+  position: absolute;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  will-change: transform, opacity;
+  animation: hitLabelPop 500ms ease-out forwards;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.hitLabel_perfect {
+  color: #4ade80;
+}
+
+.hitLabel_good {
+  color: #22d3ee;
+}
+
+@keyframes hitLabelPop {
+  0% {
+    transform: scale(0.5) translateY(8px);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.2) translateY(-2px);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1) translateY(-8px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9) translateY(-20px);
+    opacity: 0;
+  }
+}
+
+/* ---- Miss / Late Effects ---- */
+
+/* Shake container for miss */
+.missShake {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+  animation: missShake 400ms ease-out forwards;
+}
+
+@keyframes missShake {
+  0% { transform: translateX(0); }
+  15% { transform: translateX(-6px); }
+  30% { transform: translateX(5px); }
+  45% { transform: translateX(-4px); }
+  60% { transform: translateX(3px); }
+  75% { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
+}
+
+/* Red flash overlay */
+.missFlash {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+  animation: missFlashAnim 400ms ease-out forwards;
+}
+
+.missFlash_missed {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.missFlash_late {
+  background: rgba(251, 146, 60, 0.12);
+}
+
+@keyframes missFlashAnim {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* X mark for miss */
+.missX {
+  position: absolute;
+  font-size: 28px;
+  font-weight: 900;
+  will-change: transform, opacity;
+  animation: missXFade 500ms ease-out forwards;
+}
+
+.missX_missed {
+  color: #f87171;
+}
+
+.missX_late {
+  color: #fb923c;
+}
+
+@keyframes missXFade {
+  0% {
+    transform: scale(0.3) rotate(-15deg);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.1) rotate(5deg);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0.8) rotate(0deg);
+    opacity: 0;
+  }
+}
+
+/* Late label */
+.lateLabel {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  will-change: transform, opacity;
+  animation: hitLabelPop 450ms ease-out forwards;
+}
+
+.lateLabel_late {
+  color: #fb923c;
+}
+
+.lateLabel_missed {
+  color: #f87171;
+}

@@ -1,21 +1,29 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useWasm } from '@hooks/useWasm.ts'
 import { useAudioEngine } from '@hooks/useAudioEngine.ts'
 import { usePitchDetection } from '@hooks/usePitchDetection.ts'
 import { useMetronome } from '@hooks/useMetronome.ts'
 import { useScaleSelection } from '@hooks/useScaleSelection.ts'
 import { useEndlessPractice } from '@hooks/useEndlessPractice.ts'
+import { useRhythmPractice } from '@hooks/useRhythmPractice.ts'
 import { AppShell } from '@components/layout/AppShell.tsx'
 import { MetronomeControls } from '@components/metronome/MetronomeControls.tsx'
 import { PracticeView } from '@components/practice-view/PracticeView.tsx'
 import { EndlessResults } from '@components/session-results/EndlessResults.tsx'
+import { RhythmPracticeView } from '@components/rhythm-practice/RhythmPracticeView.tsx'
+import { RhythmResults } from '@components/rhythm-results/RhythmResults.tsx'
 import { PitchLeniency } from '@components/common/PitchLeniency.tsx'
 import { AdvancedSettings } from '@components/common/AdvancedSettings.tsx'
+import { NoteDurationPicker } from '@components/common/NoteDurationPicker.tsx'
 import { HomePage } from '@components/home/HomePage.tsx'
 import type { PracticeMode } from '@components/home/HomePage.tsx'
 import { EndlessSetup } from '@components/endless-setup/EndlessSetup.tsx'
 import { EndlessBanner } from '@components/practice-view/EndlessBanner.tsx'
 import type { ScaleSequence } from '@core/endless/types.ts'
+import {
+  RHYTHM_DURATION_STORAGE_KEY,
+} from '@core/rhythm/types.ts'
+import type { NoteDuration } from '@core/rhythm/types.ts'
 
 type AppView = 'home' | 'setup' | 'practicing' | 'results'
 
@@ -73,17 +81,29 @@ function loadSettings(): PersistedSettings {
   }
 }
 
+function loadNoteDuration(): NoteDuration {
+  try {
+    const raw = localStorage.getItem(RHYTHM_DURATION_STORAGE_KEY)
+    if (raw && ['whole', 'half', 'quarter', 'eighth', 'sixteenth'].includes(raw)) {
+      return raw as NoteDuration
+    }
+  } catch { /* ignore */ }
+  return 'quarter'
+}
+
 function MainApp() {
-  const saved = useRef(loadSettings()).current
+  // Load persisted settings once on mount (lazy initializer runs only on first render)
+  const [saved] = useState(loadSettings)
   const [view, setView] = useState<AppView>('home')
+  const [activeMode, setActiveMode] = useState<PracticeMode>('scales')
   const [useMetronomeEnabled, setUseMetronomeEnabled] = useState(saved.metronomeEnabled)
   const [centsTolerance, setCentsTolerance] = useState(saved.centsTolerance)
   const [ignoreOctave, setIgnoreOctave] = useState(saved.ignoreOctave)
 
-  const [metronomeExpanded, setMetronomeExpanded] = useState(false)
+  // Rhythm mode state
+  const [noteDuration, setNoteDuration] = useState<NoteDuration>(loadNoteDuration)
 
-  // Track the last completed score for transition display
-  const [lastCompletedScore, setLastCompletedScore] = useState<import('@core/wasm/types.ts').SessionScore | null>(null)
+  const [metronomeExpanded, setMetronomeExpanded] = useState(false)
 
   // Audio engine
   const audio = useAudioEngine()
@@ -99,16 +119,7 @@ function MainApp() {
   })
 
   // Metronome
-  const metronome = useMetronome(audio.audioContext)
-
-  // Initialize BPM from saved settings
-  const bpmInitialized = useRef(false)
-  useEffect(() => {
-    if (!bpmInitialized.current && saved.bpm !== 120) {
-      metronome.setBpm(saved.bpm)
-      bpmInitialized.current = true
-    }
-  }, [saved.bpm, metronome.setBpm])
+  const metronome = useMetronome(audio.audioContext, saved.bpm)
 
   // Persist settings on change
   useEffect(() => {
@@ -120,45 +131,82 @@ function MainApp() {
     }))
   }, [metronome.bpm, useMetronomeEnabled, centsTolerance, ignoreOctave])
 
+  // Persist rhythm settings
+  useEffect(() => {
+    localStorage.setItem(RHYTHM_DURATION_STORAGE_KEY, noteDuration)
+  }, [noteDuration])
+
   // Scale practice (endless mode)
-  const endless = useEndlessPractice()
+  const {
+    endlessState, innerSessionState, startEndless, stopEndless,
+    processFrame: endlessProcessFrame, skipNote,
+  } = useEndlessPractice()
 
-  // Feed pitch detection into the session
-  useEffect(() => {
-    if (view !== 'practicing' || !pitchResult.pitch) return
-    if (endless.innerSessionState?.phase === 'Playing') {
-      endless.processFrame(pitchResult.pitch)
+  // Derive the last completed score for transition display (no state needed)
+  const lastCompletedScore = useMemo(() => {
+    if (endlessState?.phase === 'transitioning' && endlessState.results.length > 0) {
+      return endlessState.results[endlessState.results.length - 1].score
     }
-  }, [view, pitchResult.pitch, endless.innerSessionState?.phase, endless.processFrame])
+    return null
+  }, [endlessState?.phase, endlessState?.results])
 
-  // Track transition scores for the banner display
+  // Rhythm practice mode
+  const {
+    rhythmState, sessionState: rhythmSessionState, startRhythm, stopRhythm,
+    processFrame: rhythmProcessFrame,
+  } = useRhythmPractice({ audioContext: audio.audioContext, onBeatSubscribe: metronome.onBeat })
+
+  // Feed pitch detection into the session (endless mode)
   useEffect(() => {
-    if (endless.endlessState?.phase === 'transitioning' && endless.endlessState.results.length > 0) {
-      const lastResult = endless.endlessState.results[endless.endlessState.results.length - 1]
-      setLastCompletedScore(lastResult.score)
+    if (view !== 'practicing' || !pitchResult.pitch || activeMode !== 'scales') return
+    if (innerSessionState?.phase === 'Playing') {
+      endlessProcessFrame(pitchResult.pitch)
     }
-  }, [endless.endlessState?.phase, endless.endlessState?.results.length])
+  }, [view, pitchResult.pitch, innerSessionState?.phase, endlessProcessFrame, activeMode])
 
-  // Auto-transition to results when user stops
+  // Feed pitch detection into rhythm mode
   useEffect(() => {
-    if (endless.endlessState?.phase === 'stopped') {
+    if (view !== 'practicing' || !pitchResult.pitch || activeMode !== 'rhythm') return
+    if (rhythmSessionState?.phase === 'playing') {
+      rhythmProcessFrame(pitchResult.pitch)
+    }
+  }, [view, pitchResult.pitch, rhythmSessionState?.phase, rhythmProcessFrame, activeMode])
+
+  // Destructure stable functions from hooks so dependency arrays are precise
+  const { stop: metronomeStop, start: metronomeStart, isPlaying: metronomeIsPlaying, bpm } = metronome
+  const { state: audioState, initialize: audioInitialize, audioContext: audioCtx } = audio
+
+  // Auto-transition to results when user stops (endless)
+  useEffect(() => {
+    if (activeMode !== 'scales') return
+    if (endlessState?.phase === 'stopped') {
       if (useMetronomeEnabled) {
-        metronome.stop()
+        metronomeStop()
       }
-      setView('results')
+      queueMicrotask(() => setView('results'))
     }
-  }, [endless.endlessState?.phase, useMetronomeEnabled, metronome.stop])
+  }, [endlessState?.phase, useMetronomeEnabled, metronomeStop, activeMode])
+
+  // Auto-transition to results when user stops (rhythm)
+  useEffect(() => {
+    if (activeMode !== 'rhythm') return
+    if (rhythmState?.phase === 'stopped') {
+      metronomeStop()
+      queueMicrotask(() => setView('results'))
+    }
+  }, [rhythmState?.phase, metronomeStop, activeMode])
 
   // ---- Navigation ----
 
   const handleGoHome = useCallback(() => {
-    endless.stopEndless()
-    metronome.stop()
-    setLastCompletedScore(null)
+    stopEndless()
+    stopRhythm()
+    metronomeStop()
     setView('home')
-  }, [endless.stopEndless, metronome.stop])
+  }, [stopEndless, stopRhythm, metronomeStop])
 
-  const handleSelectMode = useCallback((_mode: PracticeMode) => {
+  const handleSelectMode = useCallback((mode: PracticeMode) => {
+    setActiveMode(mode)
     setView('setup')
   }, [])
 
@@ -167,69 +215,112 @@ function MainApp() {
   const endlessSequenceRef = useRef<ScaleSequence | null>(null)
 
   const handleStartPractice = useCallback(async (sequence: ScaleSequence) => {
-    if (audio.state === 'uninitialized') {
-      await audio.initialize()
+    if (audioState === 'uninitialized') {
+      await audioInitialize()
     }
 
     endlessSequenceRef.current = sequence
-    setLastCompletedScore(null)
-    endless.startEndless(sequence, centsTolerance, 3, ignoreOctave)
+    startEndless(sequence, centsTolerance, 3, ignoreOctave)
 
     if (useMetronomeEnabled) {
-      metronome.start()
+      metronomeStart()
     }
 
     setView('practicing')
-  }, [audio, endless.startEndless, centsTolerance, ignoreOctave, useMetronomeEnabled, metronome.start])
+  }, [audioState, audioInitialize, startEndless, centsTolerance, ignoreOctave, useMetronomeEnabled, metronomeStart])
 
   const handleStopPractice = useCallback(() => {
-    endless.stopEndless()
-    metronome.stop()
-  }, [endless.stopEndless, metronome.stop])
+    if (activeMode === 'rhythm') {
+      stopRhythm()
+    } else {
+      stopEndless()
+    }
+    metronomeStop()
+  }, [activeMode, stopEndless, stopRhythm, metronomeStop])
 
   const handleRetry = useCallback(() => {
     if (!endlessSequenceRef.current) return
-    setLastCompletedScore(null)
-    endless.startEndless(endlessSequenceRef.current, centsTolerance, 3, ignoreOctave)
 
-    if (useMetronomeEnabled) {
-      metronome.start()
+    if (activeMode === 'rhythm') {
+      startRhythm(
+        endlessSequenceRef.current,
+        bpm,
+        noteDuration,
+        centsTolerance,
+        ignoreOctave,
+        audioCtx ?? undefined,
+      )
+      metronomeStart()
+      setView('practicing')
+    } else {
+      startEndless(endlessSequenceRef.current, centsTolerance, 3, ignoreOctave)
+
+      if (useMetronomeEnabled) {
+        metronomeStart()
+      }
+
+      setView('practicing')
+    }
+  }, [activeMode, startEndless, startRhythm, centsTolerance, ignoreOctave, useMetronomeEnabled, metronomeStart, bpm, noteDuration, audioCtx])
+
+  // Rhythm-specific start handler
+  const handleStartRhythmPractice = useCallback(async (sequence: ScaleSequence) => {
+    // Ensure the audio engine is initialised and grab the AudioContext
+    // directly from the return value.  We cannot rely on `audio.audioContext`
+    // (React state) because the state update from initialize() hasn't been
+    // committed to a render yet at this point in the async callback.
+    let ctx = audioCtx
+    if (audioState === 'uninitialized') {
+      ctx = await audioInitialize()
     }
 
+    if (!ctx) return
+
+    endlessSequenceRef.current = sequence
+    startRhythm(
+      sequence,
+      bpm,
+      noteDuration,
+      centsTolerance,
+      ignoreOctave,
+      ctx,
+    )
+    metronomeStart()
     setView('practicing')
-  }, [endless.startEndless, centsTolerance, ignoreOctave, useMetronomeEnabled, metronome.start])
+  }, [audioCtx, audioState, audioInitialize, startRhythm, bpm, metronomeStart, noteDuration, centsTolerance, ignoreOctave])
 
   const handleMetronomeToggle = useCallback(() => {
-    if (metronome.isPlaying) {
-      metronome.stop()
+    if (metronomeIsPlaying) {
+      metronomeStop()
     } else {
-      if (audio.state === 'uninitialized') {
-        audio.initialize().then(() => metronome.start())
+      if (audioState === 'uninitialized') {
+        audioInitialize().then(() => metronomeStart())
       } else {
-        metronome.start()
+        metronomeStart()
       }
     }
-  }, [metronome.isPlaying, metronome.stop, metronome.start, audio])
+  }, [metronomeIsPlaying, metronomeStop, metronomeStart, audioState, audioInitialize])
 
   // Build the settings slot for the setup config panel
+  const isRhythmMode = activeMode === 'rhythm'
   const setupSettingsSlot = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {/* Compact single-row metronome */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '44px' }}>
-        <input
-          type="checkbox"
-          checked={useMetronomeEnabled}
-          onChange={(e) => setUseMetronomeEnabled(e.target.checked)}
-          style={{ accentColor: 'var(--color-accent)', width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0 }}
-        />
+        {!isRhythmMode && (
+          <input
+            type="checkbox"
+            checked={useMetronomeEnabled}
+            onChange={(e) => setUseMetronomeEnabled(e.target.checked)}
+            style={{ accentColor: 'var(--color-accent)', width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0 }}
+          />
+        )}
         <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)', flex: 1 }}>
           Metronome
         </span>
-        {useMetronomeEnabled && (
-          <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
-            {metronome.bpm} BPM
-          </span>
-        )}
+        <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+          {metronome.bpm} BPM
+        </span>
         <button
           onClick={() => setMetronomeExpanded(e => !e)}
           style={{
@@ -245,14 +336,14 @@ function MainApp() {
         </button>
       </div>
 
-      {/* Collapsible BPM + Advanced */}
+      {/* Collapsible BPM controls */}
       <div style={{
         overflow: 'hidden',
-        maxHeight: metronomeExpanded ? '300px' : '0',
+        maxHeight: metronomeExpanded ? '200px' : '0',
         transition: 'max-height 240ms ease',
         display: 'flex', flexDirection: 'column', gap: '8px',
       }}>
-        {useMetronomeEnabled && (
+        {(isRhythmMode || useMetronomeEnabled) && (
           <MetronomeControls
             bpm={metronome.bpm}
             isPlaying={metronome.isPlaying}
@@ -262,22 +353,31 @@ function MainApp() {
             onToggle={handleMetronomeToggle}
           />
         )}
-        <AdvancedSettings>
-          <PitchLeniency
-            centsTolerance={centsTolerance}
-            onCentsToleranceChange={setCentsTolerance}
+        {activeMode === 'rhythm' && (
+          <NoteDurationPicker
+            value={noteDuration}
+            onChange={setNoteDuration}
+            bpm={metronome.bpm}
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', fontSize: '0.875rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={ignoreOctave}
-              onChange={(e) => setIgnoreOctave(e.target.checked)}
-              style={{ accentColor: 'var(--color-accent)' }}
-            />
-            Accept any octave (ignore octave matching)
-          </label>
-        </AdvancedSettings>
+        )}
       </div>
+
+      {/* Advanced Settings — always its own section */}
+      <AdvancedSettings>
+        <PitchLeniency
+          centsTolerance={centsTolerance}
+          onCentsToleranceChange={setCentsTolerance}
+        />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', fontSize: '0.875rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={ignoreOctave}
+            onChange={(e) => setIgnoreOctave(e.target.checked)}
+            style={{ accentColor: 'var(--color-accent)' }}
+          />
+          Accept any octave (ignore octave matching)
+        </label>
+      </AdvancedSettings>
     </div>
   )
 
@@ -294,33 +394,34 @@ function MainApp() {
         <div style={{ padding: 'var(--space-xl)', width: '100%', boxSizing: 'border-box' }}>
           <EndlessSetup
             availableScales={scale.availableScales}
-            onStartSequence={handleStartPractice}
+            onStartSequence={activeMode === 'rhythm' ? handleStartRhythmPractice : handleStartPractice}
             settingsSlot={setupSettingsSlot}
+            hideSkipTransition={isRhythmMode}
           />
         </div>
       )}
 
-      {view === 'practicing' && (
+      {view === 'practicing' && activeMode === 'scales' && (
         <>
-          {endless.endlessState && (
+          {endlessState && (
             <EndlessBanner
-              endlessState={endless.endlessState}
+              endlessState={endlessState}
               lastCompletedScore={lastCompletedScore}
             />
           )}
 
-          {endless.innerSessionState && endless.endlessState?.phase !== 'transitioning' && (
+          {innerSessionState && endlessState?.phase !== 'transitioning' && (
             <PracticeView
-              scaleNotes={endless.endlessState?.currentScaleNotes ?? []}
-              sessionState={endless.innerSessionState}
+              scaleNotes={endlessState?.currentScaleNotes ?? []}
+              sessionState={innerSessionState}
               detectedPitch={pitchResult.pitch}
               noteResult={pitchResult.noteResult}
-              onSkipNote={endless.skipNote}
+              onSkipNote={skipNote}
               ignoreOctave={ignoreOctave}
             />
           )}
 
-          {useMetronomeEnabled && endless.endlessState?.phase !== 'transitioning' && (
+          {useMetronomeEnabled && endlessState?.phase !== 'transitioning' && (
             <div style={{ padding: '0 var(--space-xl) var(--space-md)' }}>
               <MetronomeControls
                 bpm={metronome.bpm}
@@ -329,8 +430,8 @@ function MainApp() {
                 beatsPerMeasure={metronome.beatsPerMeasure}
                 onBpmChange={metronome.setBpm}
                 onToggle={() => {
-                  if (metronome.isPlaying) metronome.stop()
-                  else metronome.start()
+                  if (metronome.isPlaying) metronomeStop()
+                  else metronomeStart()
                 }}
                 compact
               />
@@ -355,9 +456,27 @@ function MainApp() {
         </>
       )}
 
-      {view === 'results' && endless.endlessState && (
+      {view === 'practicing' && activeMode === 'rhythm' && rhythmSessionState && rhythmState && (
+        <RhythmPracticeView
+          sessionState={rhythmSessionState}
+          rhythmState={rhythmState}
+          detectedPitch={pitchResult.pitch}
+          noteResult={pitchResult.noteResult}
+          onStop={handleStopPractice}
+        />
+      )}
+
+      {view === 'results' && activeMode === 'scales' && endlessState && (
         <EndlessResults
-          endlessState={endless.endlessState}
+          endlessState={endlessState}
+          onRetry={handleRetry}
+          onGoHome={handleGoHome}
+        />
+      )}
+
+      {view === 'results' && activeMode === 'rhythm' && rhythmState && (
+        <RhythmResults
+          rhythmState={rhythmState}
           onRetry={handleRetry}
           onGoHome={handleGoHome}
         />

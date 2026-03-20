@@ -1,0 +1,288 @@
+/* Rhythm Practice View */
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  position: relative;
+  flex: 1;
+  background: #0b0d1a;
+}
+
+/* Mode badge */
+.modeBadge {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-xl);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* Stop button */
+.stopButton {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-xl);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: all var(--transition-fast);
+}
+
+.stopButton:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+/* Beat pulse dots */
+.beatDots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 24px;
+  margin-top: var(--space-xl);
+}
+
+.beatDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: #1e2038;
+  transition: all 80ms ease;
+}
+
+.beatDotFirst {
+  width: 10px;
+  height: 10px;
+}
+
+.beatDotActive {
+  background: #f59e0b;
+  transform: scale(1.4);
+}
+
+/* Note rail — taller to accommodate staff notation */
+.railContainer {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: #07080f;
+  border: 1px solid #1a1c2e;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* Playhead line */
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 25%;
+  width: 2px;
+  background: #a3e635;
+  box-shadow: 0 0 12px rgba(163, 230, 53, 0.7);
+  z-index: 10;
+  transition: opacity 80ms ease;
+}
+
+/* Feedback overlay anchored at the playhead */
+.playheadFeedback {
+  position: absolute;
+  left: 25%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100px;
+  height: 100px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.playheadPulse {
+  animation: playheadPulse 300ms ease;
+}
+
+@keyframes playheadPulse {
+  0% { opacity: 1; }
+  40% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* Rail inner (scrolls) */
+.railTrack {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+  will-change: transform;
+}
+
+/* Note cell */
+.noteCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0;
+  background: #181a2e;
+  border-right: 1px solid #2e3058;
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.noteCellActive {
+  background: #21234a;
+  border-left: 3px solid #a3e635;
+  box-shadow: inset 0 0 0 1px rgba(163, 230, 53, 0.25);
+}
+
+.noteCellPast {
+  background: #0e0f1c;
+  opacity: 0.6;
+}
+
+/* Pitch indicator below rail */
+.pitchDisplay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.pitchNote {
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  min-width: 60px;
+  text-align: center;
+}
+
+.pitchBar {
+  flex: 1;
+  max-width: 300px;
+  height: 6px;
+  background: #1e2038;
+  border-radius: var(--radius-full);
+  position: relative;
+}
+
+.pitchCenter {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: #4a4e70;
+  transform: translateX(-50%);
+}
+
+.pitchNeedle {
+  position: absolute;
+  top: -5px;
+  width: 10px;
+  height: 16px;
+  background: #a3e635;
+  border-radius: var(--radius-sm);
+  transform: translateX(-50%);
+  transition: left var(--transition-fast);
+}
+
+.pitchLabel {
+  font-size: 0.7rem;
+  color: #7b7fa8;
+  white-space: nowrap;
+}
+
+/* Scale info bar */
+.scaleInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-sm);
+}
+
+.scaleLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.scaleInfoRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.timeSignature {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.scaleMeta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Countdown dots (metronome-synced, inline) */
+.countdownDots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.countdownDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1c1e3a;
+  border: 2px solid #2e3058;
+  transition: background 80ms ease, transform 80ms ease, border-color 80ms ease;
+}
+
+.countdownDotLit {
+  background: #f59e0b;
+  border-color: #fbbf24;
+  transform: scale(1.25);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.65);
+}
+
+/* Progress footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.score {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}

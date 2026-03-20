@@ -14,7 +14,6 @@ interface PracticeViewProps {
 export function PracticeView({
   scaleNotes,
   sessionState,
-  detectedPitch,
   noteResult,
   onSkipNote,
   ignoreOctave = false,

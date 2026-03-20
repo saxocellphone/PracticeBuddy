@@ -47,9 +47,11 @@ interface EndlessSetupProps {
   onStartSequence: (sequence: ScaleSequence) => void
   /** Slot for metronome / advanced settings controls rendered in the config panel */
   settingsSlot?: ReactNode
+  /** When true, hides the "Skip transition screen" toggle (e.g. Rhythm Mode) */
+  hideSkipTransition?: boolean
 }
 
-export function EndlessSetup({ availableScales, onStartSequence, settingsSlot }: EndlessSetupProps) {
+export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, hideSkipTransition }: EndlessSetupProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
   const [presetKey, setPresetKey] = useState('C')
   const [numOctaves, setNumOctaves] = useState(1)
@@ -65,12 +67,13 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot }:
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingSequence, setEditingSequence] = useState<SavedCustomSequence | undefined>()
   const [previewStepIndex, setPreviewStepIndex] = useState(0)
+  const [showMoreScaleTypes, setShowMoreScaleTypes] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('practicebuddy:skipTransition', String(skipTransition))
   }, [skipTransition])
 
-  useEffect(() => { setPreviewStepIndex(0) }, [selectedPresetId, presetKey, basicScaleTypeIndex])
+  useEffect(() => { queueMicrotask(() => setPreviewStepIndex(0)) }, [selectedPresetId, presetKey, basicScaleTypeIndex])
 
   const selectedPreset = PRESETS.find((p) => p.id === selectedPresetId)
   const isBasicPreset = selectedPreset?.category === 'basic'
@@ -325,25 +328,45 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot }:
             {isBasicPreset && (
               <>
                 <div className={styles.configSection}>
-                  <span className={styles.configLabel}>Scale Type</span>
-                  {Object.entries(scalesByCategory).map(([category, scales]) => (
-                    <div key={category} className={styles.scaleCategoryGroup}>
-                      <span className={styles.scaleCategoryLabel}>
-                        {categoryLabels[category] ?? category}
-                      </span>
-                      <div className={styles.chipRow}>
-                        {scales.map(({ info, index }) => (
-                          <button
-                            key={index}
-                            className={`${styles.chip} ${basicScaleTypeIndex === index ? styles.chipActive : ''}`}
-                            onClick={() => setBasicScaleTypeIndex(index)}
-                          >
-                            {info.displayName}
-                          </button>
-                        ))}
+                  <div style={{ display: 'flex', alignItems: 'center', height: '28px' }}>
+                    <span className={styles.configLabel} style={{ flex: 1 }}>Scale Type</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowMoreScaleTypes(v => !v)}
+                      style={{
+                        width: '28px', height: '28px', borderRadius: '14px',
+                        border: '1px solid var(--color-border)', background: 'transparent',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--color-text-muted)', fontSize: '16px', lineHeight: 1, flexShrink: 0,
+                      }}
+                      aria-label={showMoreScaleTypes ? 'Show fewer scale types' : 'Show more scale types'}
+                    >
+                      {showMoreScaleTypes ? '\u2212' : '+'}
+                    </button>
+                  </div>
+                  {Object.entries(scalesByCategory).map(([category, scales]) => {
+                    const isMore = category === 'modes' || category === 'jazz'
+                    const isSelectedHere = scales.some(s => s.index === basicScaleTypeIndex)
+                    if (isMore && !showMoreScaleTypes && !isSelectedHere) return null
+                    return (
+                      <div key={category} className={styles.scaleCategoryGroup}>
+                        <span className={styles.scaleCategoryLabel}>
+                          {categoryLabels[category] ?? category}
+                        </span>
+                        <div className={styles.chipRow}>
+                          {scales.map(({ info, index }) => (
+                            <button
+                              key={index}
+                              className={`${styles.chip} ${basicScaleTypeIndex === index ? styles.chipActive : ''}`}
+                              onClick={() => setBasicScaleTypeIndex(index)}
+                            >
+                              {info.displayName}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 <div className={styles.configSection}>
@@ -380,7 +403,7 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot }:
             </div>
 
             {/* Non-basic presets: skip transition */}
-            {!isBasicPreset && (
+            {!isBasicPreset && !hideSkipTransition && (
               <label className={styles.toggleRow}>
                 <input
                   type="checkbox"

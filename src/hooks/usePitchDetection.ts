@@ -66,7 +66,8 @@ export function usePitchDetection(options: {
     if (enabled && analyserNode) {
       startDetection()
     } else {
-      stopDetection()
+      // Defer the state reset to avoid synchronous setState in effect body
+      queueMicrotask(() => stopDetection())
     }
 
     return () => {

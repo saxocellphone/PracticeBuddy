@@ -148,7 +148,6 @@ function getAccidental(pitchClass: string): string | null {
 export function StaffNotation({
   scaleNotes,
   currentNoteIndex,
-  lastResult,
   ignoreOctave = false,
 }: StaffNotationProps) {
   const containerRef = useRef<HTMLDivElement>(null)

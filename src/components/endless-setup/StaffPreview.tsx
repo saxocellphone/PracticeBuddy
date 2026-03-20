@@ -76,7 +76,7 @@ function noteToVexKey(note: Note): string {
   return `${note.pitchClass.toLowerCase()}/${note.octave}`
 }
 
-export function StaffPreview({ notes, scaleName, rootPitchClass, scaleTypeIndex }: StaffPreviewProps) {
+export function StaffPreview({ notes, rootPitchClass, scaleTypeIndex }: StaffPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(420)
 
