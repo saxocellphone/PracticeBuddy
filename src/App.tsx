@@ -67,6 +67,7 @@ interface PersistedSettings {
   centsTolerance: number
   ignoreOctave: boolean
   timingMode: TimingMode
+  micSensitivity: number
 }
 
 const DEFAULT_SETTINGS: PersistedSettings = {
@@ -75,6 +76,19 @@ const DEFAULT_SETTINGS: PersistedSettings = {
   centsTolerance: 40,
   ignoreOctave: true,
   timingMode: 'follow',
+  micSensitivity: 50,
+}
+
+/**
+ * Derive pitch detection thresholds from a 0-100 mic sensitivity value.
+ * Higher sensitivity → lower thresholds → picks up quieter/less clear sounds.
+ */
+export function sensitivityToThresholds(sensitivity: number): { clarityThreshold: number; powerThreshold: number } {
+  // Clarity: 0.65 (strict) at sensitivity=0 → 0.15 (loose) at sensitivity=100
+  const clarityThreshold = 0.65 - (sensitivity / 100) * 0.50
+  // Power: 4.5 (strict) at sensitivity=0 → 0.5 (loose) at sensitivity=100
+  const powerThreshold = 4.5 - (sensitivity / 100) * 4.0
+  return { clarityThreshold, powerThreshold }
 }
 
 function loadSettings(): PersistedSettings {
@@ -88,6 +102,7 @@ function loadSettings(): PersistedSettings {
       centsTolerance: typeof parsed.centsTolerance === 'number' && parsed.centsTolerance >= 10 && parsed.centsTolerance <= 100 ? parsed.centsTolerance : DEFAULT_SETTINGS.centsTolerance,
       ignoreOctave: typeof parsed.ignoreOctave === 'boolean' ? parsed.ignoreOctave : DEFAULT_SETTINGS.ignoreOctave,
       timingMode: parsed.timingMode === 'follow' || parsed.timingMode === 'rhythm' ? parsed.timingMode : DEFAULT_SETTINGS.timingMode,
+      micSensitivity: typeof parsed.micSensitivity === 'number' && parsed.micSensitivity >= 0 && parsed.micSensitivity <= 100 ? parsed.micSensitivity : DEFAULT_SETTINGS.micSensitivity,
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -112,6 +127,7 @@ function MainApp() {
   const [useMetronomeEnabled, setUseMetronomeEnabled] = useState(saved.metronomeEnabled)
   const [centsTolerance, setCentsTolerance] = useState(saved.centsTolerance)
   const [ignoreOctave, setIgnoreOctave] = useState(saved.ignoreOctave)
+  const [micSensitivity, setMicSensitivity] = useState(saved.micSensitivity)
 
   // Rhythm mode state
   const [noteDuration, setNoteDuration] = useState<NoteDuration>(loadNoteDuration)
@@ -127,11 +143,14 @@ function MainApp() {
   // Scale selection (for available scales list)
   const scale = useScaleSelection()
 
-  // Pitch detection
+  // Pitch detection — derive thresholds from mic sensitivity
+  const { clarityThreshold, powerThreshold } = sensitivityToThresholds(micSensitivity)
   const pitchResult = usePitchDetection({
     analyserNode: audio.analyserNode,
     sampleRate: audio.sampleRate,
     enabled: view === 'practicing',
+    clarityThreshold,
+    powerThreshold,
   })
 
   // Metronome
@@ -145,8 +164,9 @@ function MainApp() {
       centsTolerance,
       ignoreOctave,
       timingMode,
+      micSensitivity,
     }))
-  }, [metronome.bpm, useMetronomeEnabled, centsTolerance, ignoreOctave, timingMode])
+  }, [metronome.bpm, useMetronomeEnabled, centsTolerance, ignoreOctave, timingMode, micSensitivity])
 
   // Persist rhythm settings
   useEffect(() => {
@@ -475,6 +495,28 @@ function MainApp() {
           centsTolerance={centsTolerance}
           onCentsToleranceChange={setCentsTolerance}
         />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+              Mic Sensitivity
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+              {micSensitivity}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={micSensitivity}
+            onChange={(e) => setMicSensitivity(Number(e.target.value))}
+            style={{ accentColor: 'var(--color-accent)', width: '100%' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
+            <span>Strict</span>
+            <span>Sensitive</span>
+          </div>
+        </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', fontSize: '0.875rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
           <input
             type="checkbox"

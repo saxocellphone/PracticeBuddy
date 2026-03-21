@@ -13,8 +13,9 @@ export function usePitchDetection(options: {
   sampleRate: number
   enabled: boolean
   clarityThreshold?: number
+  powerThreshold?: number
 }) {
-  const { analyserNode, sampleRate, enabled, clarityThreshold = 0.55 } = options
+  const { analyserNode, sampleRate, enabled, clarityThreshold = 0.4, powerThreshold = 2.0 } = options
 
   const [result, setResult] = useState<PitchDetectionResult>({
     pitch: null,
@@ -31,6 +32,7 @@ export function usePitchDetection(options: {
     const bufferSize = analyserNode.fftSize
     detectorRef.current = new TypedPitchDetector(sampleRate, bufferSize)
     detectorRef.current.setClarityThreshold(clarityThreshold)
+    detectorRef.current.setPowerThreshold(powerThreshold)
     bufferRef.current = new Float32Array(new ArrayBuffer(bufferSize * 4))
 
     const tick = () => {
@@ -50,7 +52,7 @@ export function usePitchDetection(options: {
     }
 
     rafRef.current = requestAnimationFrame(tick)
-  }, [analyserNode, sampleRate, clarityThreshold])
+  }, [analyserNode, sampleRate, clarityThreshold, powerThreshold])
 
   const stopDetection = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
