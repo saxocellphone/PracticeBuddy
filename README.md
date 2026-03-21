@@ -1,73 +1,85 @@
-# React + TypeScript + Vite
+# PracticeBuddy
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A music practice app for bass players with real-time pitch detection. Play your instrument into your microphone and get instant feedback on pitch accuracy and timing.
 
-Currently, two official plugins are available:
+Built with React, TypeScript, Rust/WebAssembly, and the Web Audio API.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+### Practice Modes
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Follow Mode** — Play at your own pace. The app listens to your microphone and advances to the next note when you play the correct pitch.
 
-## Expanding the ESLint configuration
+**Rhythm Mode** — Play in time with the metronome. Scored on both pitch accuracy and timing.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Scales
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- 15+ preset sequences including Jazz ii-V-I, circle of fifths, blues, modes, and more
+- Build custom scale sequences
+- All common scale types: Major, Minor, Dorian, Mixolydian, Blues, Pentatonic, etc.
+- Configurable octaves (1-3), direction (up/down/both), and loop shift
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Arpeggios
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Major, Minor, Dominant 7th, Major 7th, Minor 7th, Diminished, Augmented, and more
+- Jazz progression presets (ii-V-I Major, ii-V-i Minor)
+- Configurable octaves, direction, and loop shift through all keys
+- Chord symbols displayed above the staff notation
+
+### Notation
+
+- Real-time bass clef staff notation with proper engraving
+- Key signatures, accidentals, ledger lines
+- Chord symbols above measures (lead sheet style)
+- Multi-line wrapping for long sequences
+
+### Real-Time Feedback
+
+- Live pitch detection via WebAssembly
+- Cents-offset indicator showing how sharp or flat you are
+- Hold progress bar — sustain the note to confirm
+- Correct/incorrect flash feedback
+- Session results with per-note accuracy breakdown
+
+### Settings
+
+- Adjustable BPM with metronome
+- Mic sensitivity control for different microphone setups
+- Cents tolerance (how close to the pitch you need to be)
+- Settings persist across sessions via localStorage
+
+## Tech Stack
+
+- **Frontend**: React 19 + TypeScript (strict mode)
+- **Pitch Detection**: Rust compiled to WebAssembly
+- **Audio**: Web Audio API (microphone input + FFT analysis)
+- **Build**: Vite + wasm-pack
+- **Tests**: Vitest (300+ tests)
+
+## Development
+
+```bash
+# Prerequisites: Node.js 20+, Rust toolchain, wasm-pack
+
+# Install dependencies
+npm install
+
+# Start dev server (builds WASM + starts Vite)
+npm run dev
+
+# Production build
+npm run build
+
+# Run tests
+npm test
+
+# Run all tests (Rust + JS)
+npm run test:all
+
+# Lint
+npm run lint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## License
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+MIT
