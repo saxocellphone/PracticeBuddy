@@ -31,7 +31,7 @@ export interface NoteValidationResult {
   detectedNote: Note
   detectedFrequency: number
   detectedClarity: number
-  matchType: 'exact' | 'enharmonic' | 'wrongOctave' | 'wrong'
+  matchType: 'exact' | 'enharmonic' | 'wrongOctave' | 'octaveCorrected' | 'wrong'
 }
 
 export interface SessionConfig {

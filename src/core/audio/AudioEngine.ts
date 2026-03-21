@@ -56,7 +56,7 @@ export class AudioEngine {
       const source = this._audioContext.createMediaStreamSource(this._mediaStream)
 
       this._analyserNode = this._audioContext.createAnalyser()
-      this._analyserNode.fftSize = 4096
+      this._analyserNode.fftSize = 8192
       this._analyserNode.smoothingTimeConstant = 0
 
       source.connect(this._analyserNode)
