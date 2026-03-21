@@ -7,6 +7,14 @@ export interface ScaleStep {
   scaleTypeIndex: number
   /** Display label override (e.g., "ii - D Dorian"). Auto-generated if omitted. */
   label?: string
+  /** Chord symbol displayed above the staff (e.g., "Dm7", "G7"). Auto-generated if omitted. */
+  chordSymbol?: string
+}
+
+/** A chord symbol positioned at a specific note index in a combined note array */
+export interface PositionedChordSymbol {
+  noteIndex: number
+  symbol: string
 }
 
 /** A named, ordered collection of scale steps */
@@ -63,6 +71,10 @@ export interface EndlessSessionState {
   results: ScaleRunResult[]
   currentScaleNotes: Note[]
   currentLabel: string
+  /** Chord symbol for the current step (single mode) or first step (combined) */
+  currentChordSymbol: string | null
+  /** Chord symbols positioned at note indices (for combined mode with multiple scales) */
+  chordSymbols: PositionedChordSymbol[]
   nextLabel: string | null
   cumulativeStats: CumulativeStats
 }

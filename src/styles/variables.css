@@ -1,26 +1,26 @@
 :root {
-  /* Colors */
-  --color-bg: #0f0f14;
-  --color-surface: #1a1a24;
-  --color-surface-hover: #22222e;
-  --color-border: #2a2a3a;
+  /* Colors — Light theme */
+  --color-bg: #f8f9fb;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f0f1f5;
+  --color-border: #e0e2e8;
 
-  --color-text-primary: #e8e8f0;
-  --color-text-secondary: #8888a0;
-  --color-text-muted: #555570;
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #5c5c7a;
+  --color-text-muted: #9898ae;
 
   --color-accent: #6366f1;
-  --color-accent-hover: #818cf8;
+  --color-accent-hover: #4f46e5;
 
-  --color-correct: #22c55e;
-  --color-correct-bg: rgba(34, 197, 94, 0.1);
-  --color-incorrect: #ef4444;
-  --color-incorrect-bg: rgba(239, 68, 68, 0.1);
-  --color-missed: #6b7280;
-  --color-warning: #f59e0b;
+  --color-correct: #16a34a;
+  --color-correct-bg: rgba(22, 163, 74, 0.08);
+  --color-incorrect: #dc2626;
+  --color-incorrect-bg: rgba(220, 38, 38, 0.08);
+  --color-missed: #9ca3af;
+  --color-warning: #d97706;
 
-  --color-beat-active: #f59e0b;
-  --color-beat-inactive: #333348;
+  --color-beat-active: #d97706;
+  --color-beat-inactive: #e0e2e8;
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

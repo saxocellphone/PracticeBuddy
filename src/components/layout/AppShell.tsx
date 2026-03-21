@@ -5,15 +5,16 @@ interface AppShellProps {
   children: ReactNode
   onGoHome?: () => void
   onBack?: () => void
+  backLabel?: string
 }
 
-export function AppShell({ children, onGoHome, onBack }: AppShellProps) {
+export function AppShell({ children, onGoHome, onBack, backLabel = 'Home' }: AppShellProps) {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
         {onBack && (
           <button className={styles.backButton} onClick={onBack}>
-            &larr; Home
+            &larr; {backLabel}
           </button>
         )}
         <h1

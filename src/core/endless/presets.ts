@@ -30,6 +30,28 @@ const SCALE = {
   BebopDominant: 17,
 } as const
 
+/** Scale type → chord symbol suffix (jazz convention) */
+export const SCALE_CHORD_SUFFIXES: Record<number, string> = {
+  [SCALE.Major]: 'maj7',
+  [SCALE.NaturalMinor]: 'm7',
+  [SCALE.HarmonicMinor]: 'm(maj7)',
+  [SCALE.MelodicMinor]: 'm(maj7)',
+  [SCALE.Dorian]: 'm7',
+  [SCALE.Phrygian]: 'm7',
+  [SCALE.Lydian]: 'maj7',
+  [SCALE.Mixolydian]: '7',
+  [SCALE.Locrian]: 'm7b5',
+  [SCALE.MajorPentatonic]: 'maj',
+  [SCALE.MinorPentatonic]: 'm',
+  [SCALE.Blues]: '7',
+  [SCALE.LydianDominant]: '7',
+  [SCALE.Altered]: '7alt',
+  [SCALE.LocrianNatural2]: 'm7b5',
+  [SCALE.HalfWholeDiminished]: '7',
+  [SCALE.WholeTone]: '7',
+  [SCALE.BebopDominant]: '7',
+}
+
 /** Scale type display names */
 export const SCALE_NAMES: Record<number, string> = {
   [SCALE.Major]: 'Major',
@@ -92,12 +114,21 @@ function makeStep(
 ): ScaleStep {
   const { pitchClass, octave } = transpose(rootNote, rootOctave, semitones)
   const autoLabel = `${pitchClass}${octave} ${SCALE_NAMES[scaleTypeIndex] ?? 'Scale'}`
+  const suffix = SCALE_CHORD_SUFFIXES[scaleTypeIndex] ?? ''
   return {
     rootNote: pitchClass,
     rootOctave: octave,
     scaleTypeIndex,
     label: label ?? autoLabel,
+    chordSymbol: `${pitchClass}${suffix}`,
   }
+}
+
+/** Get the chord symbol for a scale step (e.g., "Dm7", "G7", "Cmaj7") */
+export function getStepChordSymbol(step: ScaleStep): string {
+  if (step.chordSymbol) return step.chordSymbol
+  const suffix = SCALE_CHORD_SUFFIXES[step.scaleTypeIndex] ?? ''
+  return `${step.rootNote}${suffix}`
 }
 
 /** Get a display label for a scale step */

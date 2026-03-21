@@ -6,12 +6,14 @@ interface EndlessResultsProps {
   endlessState: EndlessSessionState
   onRetry: () => void
   onGoHome: () => void
+  onBackToSetup?: () => void
 }
 
 export function EndlessResults({
   endlessState,
   onRetry,
   onGoHome,
+  onBackToSetup,
 }: EndlessResultsProps) {
   const { results, cumulativeStats } = endlessState
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
@@ -149,6 +151,11 @@ export function EndlessResults({
         <button className={styles.retryButton} onClick={onRetry}>
           Practice Again
         </button>
+        {onBackToSetup && (
+          <button className={styles.secondaryButton} onClick={onBackToSetup}>
+            Change Settings
+          </button>
+        )}
         <button className={styles.secondaryButton} onClick={onGoHome}>
           Home
         </button>

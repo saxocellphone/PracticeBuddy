@@ -82,7 +82,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
   // Also track the sample closest to the scheduled time, for timing grading
   const closestTimingSampleRef = useRef<PitchSample | null>(null)
   // Live feedback ref — set immediately on pitch detection, read by the UI
-  const liveFeedbackRef = useRef<{ noteIndex: number; pitchCorrect: boolean; timingResult: TimingResult } | null>(null)
+  const liveFeedbackRef = useRef<{ noteIndex: number; pitchCorrect: boolean; timingResult: TimingResult; timingOffsetMs: number } | null>(null)
 
   // Sequence management refs
   const sequenceRef = useRef<ScaleSequence | null>(null)
@@ -115,13 +115,18 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
     }
   }, [])
 
-  /** Convenience: evaluate note using current ref values */
+  /** Convenience: evaluate note using current ref values.
+   *  When live feedback already confirmed correct pitch for this note,
+   *  override the timing grade to match what was shown to the user.
+   *  This prevents the sample buffer eviction (max 20 samples) from
+   *  causing the final result to disagree with the live feedback.
+   */
   function evaluateCurrentNote(
     noteIndex: number,
     expectedNote: Note,
     scheduledTime: number,
   ): RhythmNoteEvent {
-    return evaluateNote(
+    const result = evaluateNote(
       noteIndex,
       expectedNote,
       scheduledTime,
@@ -131,6 +136,20 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       centsToleranceRef.current,
       ignoreOctaveRef.current,
     )
+
+    // If live feedback confirmed correct pitch, use its timing to stay consistent
+    const feedback = liveFeedbackRef.current
+    if (
+      feedback &&
+      feedback.noteIndex === noteIndex &&
+      feedback.pitchCorrect &&
+      result.pitchCorrect
+    ) {
+      result.timingResult = feedback.timingResult
+      result.timingOffsetMs = feedback.timingOffsetMs
+    }
+
+    return result
   }
 
   // Assign the actual tick/countdown/complete functions to refs via effect
@@ -442,6 +461,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       centsTolerance: number,
       ignoreOctave: boolean,
       explicitAudioContext?: AudioContext,
+      prebuiltNotes?: { allNotes: Note[]; boundaries: StepBoundary[] },
     ) => {
       const ctx = explicitAudioContext ?? audioContextRef.current
       if (!ctx) return
@@ -464,8 +484,9 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       const spn = (60 / bpm) * beatsPerNote
       secondsPerNoteRef.current = spn
 
-      // Build notes for ALL steps and concatenate into one continuous run
-      const { allNotes, boundaries } = buildAllStepsNotes(sequence, ignoreOctave)
+      // Build notes for ALL steps and concatenate into one continuous run.
+      // When prebuiltNotes is provided (e.g. from arpeggio mode), skip building.
+      const { allNotes, boundaries } = prebuiltNotes ?? buildAllStepsNotes(sequence, ignoreOctave)
       scaleNotesRef.current = allNotes
       stepBoundariesRef.current = boundaries
 

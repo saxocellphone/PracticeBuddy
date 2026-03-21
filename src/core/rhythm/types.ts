@@ -153,6 +153,7 @@ export interface RhythmSessionState {
     noteIndex: number
     pitchCorrect: boolean
     timingResult: TimingResult
+    timingOffsetMs: number
   } | null
 }
 

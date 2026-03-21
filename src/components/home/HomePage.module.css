@@ -26,6 +26,64 @@
   color: var(--color-text-secondary);
 }
 
+/* Timing toggle */
+.toggleWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+  width: 100%;
+}
+
+.toggle {
+  display: inline-flex;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 3px;
+  gap: 2px;
+}
+
+.toggleOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.toggleOption:hover {
+  color: var(--color-text-primary);
+}
+
+.toggleOptionActive {
+  background: var(--color-accent);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+.toggleOptionActive:hover {
+  color: white;
+}
+
+.toggleIcon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.toggleHint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 .sectionLabel {
   font-size: 0.7rem;
   font-weight: 600;
@@ -166,6 +224,6 @@
   letter-spacing: 0.05em;
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  background: rgba(85, 85, 112, 0.15);
+  background: rgba(100, 100, 130, 0.1);
   color: var(--color-text-muted);
 }

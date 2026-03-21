@@ -1,0 +1,260 @@
+/* Three-column layout — mirrors EndlessSetup */
+.threeColumnLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .threeColumnLayout {
+    display: grid;
+    grid-template-columns: 280px 420px 1fr;
+    gap: var(--space-xl);
+    align-items: flex-start;
+  }
+
+  .leftColumn,
+  .middleColumn,
+  .previewColumn {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.middleColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.previewColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* Section titles */
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+/* Category headers */
+.categoryGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.categoryHeader {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 20px;
+  margin-bottom: 4px;
+}
+
+.categoryGroup:first-of-type .categoryHeader {
+  margin-top: 0;
+}
+
+/* Preset rows */
+.presetRow {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  border-left: 3px solid transparent;
+}
+
+.presetRow:hover {
+  background: var(--color-surface-hover);
+}
+
+.presetRowActive {
+  background: rgba(6, 182, 212, 0.07);
+  border-left: 3px solid rgba(6, 182, 212, 1);
+  padding-left: 9px;
+}
+
+.presetRowActive .presetName {
+  color: rgba(6, 182, 212, 1);
+}
+
+.presetName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+/* Config panel */
+.presetConfig {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Panel header */
+.panelHeader {
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeaderName {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.panelHeaderDesc {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* Placeholder (no preset selected) */
+.emptyStatePlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: var(--color-text-muted);
+  grid-column: 2 / -1;
+}
+
+.emptyStatePlaceholder svg {
+  color: var(--color-text-muted);
+}
+
+.emptyStatePlaceholder span {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin-top: 12px;
+}
+
+/* Config sections */
+.configSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.configLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 0;
+}
+
+/* Chips */
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chip:hover {
+  background: var(--color-surface-hover);
+}
+
+.chipActive {
+  background: rgba(6, 182, 212, 1);
+  color: white;
+  border-color: rgba(6, 182, 212, 1);
+}
+
+.chipActive:hover {
+  background: rgba(6, 182, 212, 1);
+  color: white;
+  border-color: rgba(6, 182, 212, 1);
+}
+
+/* Start button */
+.startButton {
+  align-self: stretch;
+  height: 48px;
+  border-radius: 8px;
+  background: rgba(6, 182, 212, 1);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+
+.startButton:hover {
+  opacity: 0.88;
+}
+
+/* Preview */
+.previewDirection {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Staff notation preview */
+.staffPreviewContainer {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+}
+
+.staffPreviewLine {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.staffPreviewMeasure {
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.previewUnavailable {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+

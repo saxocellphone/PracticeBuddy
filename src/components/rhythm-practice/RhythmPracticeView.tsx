@@ -9,7 +9,7 @@ import type {
   RhythmNoteEvent,
 } from '@core/rhythm/types.ts'
 import { COUNTDOWN_BEATS } from '@hooks/useRhythmPractice.ts'
-import { StaffNote } from './StaffNote.tsx'
+import { MeasureStaff } from '@core/notation'
 import { HitMissFeedback } from './HitMissFeedback.tsx'
 import styles from './RhythmPracticeView.module.css'
 
@@ -24,8 +24,8 @@ const BEATS_PER_MEASURE = 4
 const BEAT_VALUE = 4
 
 /** Extra width in the first measure cell for bass clef + time signature rendering.
- *  Must match CLEF_WIDTH (54) + TIME_SIG_WIDTH (28) in StaffNote.tsx */
-const CLEF_TIME_SIG_WIDTH_PX = 82
+ *  Must match CLEF_WIDTH (54) + TIME_SIG_WIDTH (34) in StaffNote.tsx */
+const CLEF_TIME_SIG_WIDTH_PX = 88
 
 interface RhythmPracticeViewProps {
   sessionState: RhythmSessionState
@@ -59,11 +59,18 @@ export function RhythmPracticeView({
   // Each measure cell spans BEATS_PER_MEASURE beats
   const cellWidthPx = QUARTER_NOTE_WIDTH_PX * BEATS_PER_MEASURE
 
+  // Notes are centered within their slot (index + 0.5), so the first note
+  // is offset by half a note-spacing from the cell edge. Account for this
+  // so the playhead hits each note exactly on time.
+  const halfNoteSpacingPx = (QUARTER_NOTE_WIDTH_PX * noteDurationBeats) / 2
+
   // Calculate scroll position based on current time.
-  // One cell = one beat = QUARTER_NOTE_WIDTH_PX pixels.
-  // One beat takes (60 / bpm) seconds, so:
+  // One beat = QUARTER_NOTE_WIDTH_PX pixels, one beat takes (60 / bpm) seconds:
   const pixelsPerSecond = QUARTER_NOTE_WIDTH_PX * sessionState.bpm / 60
   const playheadOffsetPercent = 0.25 // 25% from left
+
+  // Total offset: clef/time-sig in first cell + half-note centering
+  const scrollOffsetPx = CLEF_TIME_SIG_WIDTH_PX + halfNoteSpacingPx
 
   const updateRailPosition = useCallback(() => {
     if (!railTrackRef.current || !railContainerRef.current) return
@@ -72,20 +79,21 @@ export function RhythmPracticeView({
     const playheadX = containerWidth * playheadOffsetPercent
 
     if (sessionState.phase !== 'playing') {
-      railTrackRef.current.style.transform = `translateX(${playheadX - CLEF_TIME_SIG_WIDTH_PX}px)`
+      railTrackRef.current.style.transform = `translateX(${playheadX - scrollOffsetPx}px)`
       return
     }
 
     const elapsed = sessionState.currentTime - sessionState.startTime
     const scrollX = elapsed * pixelsPerSecond
 
-    railTrackRef.current.style.transform = `translateX(${playheadX - scrollX - CLEF_TIME_SIG_WIDTH_PX}px)`
+    railTrackRef.current.style.transform = `translateX(${playheadX - scrollX - scrollOffsetPx}px)`
   }, [
     sessionState.phase,
     sessionState.currentTime,
     sessionState.startTime,
     pixelsPerSecond,
     playheadOffsetPercent,
+    scrollOffsetPx,
   ])
 
   useEffect(() => {
@@ -217,7 +225,7 @@ export function RhythmPracticeView({
                 style={{ width: `${thisCellWidth}px` }}
               >
                 {/* Staff notation — notes grouped per measure */}
-                <StaffNote
+                <MeasureStaff
                   notes={group.map((e) => ({
                     note: e.expectedNote,
                     duration: sessionState.noteDuration,
@@ -229,6 +237,7 @@ export function RhythmPracticeView({
                   width={thisCellWidth}
                   height={STAFF_HEIGHT_PX}
                   dimmed={isPast}
+                  activeNoteIndex={isActive ? sessionState.currentNoteIndex - firstIdx : -1}
                 />
               </div>
             )

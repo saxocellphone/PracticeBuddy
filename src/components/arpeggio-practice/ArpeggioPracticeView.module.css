@@ -1,0 +1,187 @@
+/* ArpeggioPracticeView-specific styles */
+/* Layout, pitch indicator, hold progress, and flash are in PracticeLayout.module.css */
+
+/* Banner */
+.banner {
+  padding: var(--space-sm) var(--space-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bannerInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bannerMeta {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  transition: all var(--transition-fast);
+}
+
+.dotDone {
+  background: var(--color-correct);
+}
+
+.dotCurrent {
+  background: rgba(6, 182, 212, 1);
+  width: 10px;
+  height: 10px;
+}
+
+.comingUp {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.accuracy {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* Transition interstitial */
+.transition {
+  padding: var(--space-2xl) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  text-align: center;
+}
+
+.transitionComplete {
+  font-size: 0.85rem;
+  color: var(--color-correct);
+  font-weight: 600;
+}
+
+.transitionScore {
+  display: flex;
+  gap: var(--space-xl);
+}
+
+.transitionStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.transitionStatValue {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.transitionStatLabel {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.transitionNextLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.transitionNextName {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.transitionBar {
+  width: 200px;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.transitionBarFill {
+  height: 100%;
+  background: rgba(6, 182, 212, 1);
+  border-radius: var(--radius-full);
+  animation: fillBar 2s linear forwards;
+}
+
+@keyframes fillBar {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+/* Footer elements */
+.progress {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.score {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.skipButton {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.skipButton:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+/* Stop button */
+.stopRow {
+  padding: 0 var(--space-xl) var(--space-xl);
+  display: flex;
+  justify-content: center;
+}
+
+.stopButton {
+  padding: 8px 24px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.stopButton:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}

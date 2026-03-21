@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { usePracticeSession } from './usePracticeSession.ts'
-import { getStepLabel, transpose } from '@core/endless/presets.ts'
+import { getStepLabel, getStepChordSymbol, transpose } from '@core/endless/presets.ts'
 import { buildScaleNotes } from '@core/music/scaleBuilder.ts'
 import type { DetectedPitch } from '@core/wasm/types.ts'
+import type { Note } from '@core/wasm/types.ts'
 import type {
   ScaleSequence,
   EndlessSessionState,
   ScaleRunResult,
+  PositionedChordSymbol,
   CumulativeStats,
 } from '@core/endless/types.ts'
 
@@ -47,6 +49,31 @@ const EMPTY_STATS: CumulativeStats = {
   averageCentsOffset: 0,
 }
 
+/** Whether to combine all steps into a single continuous session */
+function isCombinedMode(sequence: ScaleSequence): boolean {
+  return sequence.skipTransition === true && sequence.steps.length > 1
+}
+
+/** Build combined notes for all steps in a sequence (for combined mode) */
+function buildCombinedLoopNotes(sequence: ScaleSequence): {
+  notes: Note[]
+  chordSymbols: PositionedChordSymbol[]
+} {
+  const allNotes: Note[] = []
+  const chordSymbols: PositionedChordSymbol[] = []
+  for (const step of sequence.steps) {
+    chordSymbols.push({ noteIndex: allNotes.length, symbol: getStepChordSymbol(step) })
+    const { notes } = buildScaleNotes(step, sequence.direction, sequence.numOctaves)
+    allNotes.push(...notes)
+  }
+  return { notes: allNotes, chordSymbols }
+}
+
+/** Build a combined label from all step labels (e.g., "D Dorian → G Mixolydian → C Major") */
+function getCombinedLabel(sequence: ScaleSequence, ignoreOctave: boolean): string {
+  return sequence.steps.map(s => getStepLabel(s, ignoreOctave)).join(' \u2192 ')
+}
+
 export function useEndlessPractice() {
   const {
     sessionState: innerSessionState,
@@ -73,7 +100,7 @@ export function useEndlessPractice() {
   const stepIndexRef = useRef(0)
   const loopsRef = useRef(0)
 
-  // Track whether we've already captured the score for the current scale
+  // Track whether we've already captured the score for the current session
   const scoreCapturedRef = useRef(false)
 
   const startEndless = useCallback(
@@ -98,34 +125,76 @@ export function useEndlessPractice() {
       loopsRef.current = 0
       scoreCapturedRef.current = false
 
-      const step = sequence.steps[0]
-      const { notes: scaleNotes } = buildScaleNotes(step, sequence.direction, sequence.numOctaves)
-      const label = getStepLabel(step, ignoreOctave)
+      if (isCombinedMode(sequence)) {
+        // Combined mode: build all step notes into one continuous session
+        const { notes: allNotes, chordSymbols } = buildCombinedLoopNotes(sequence)
+        const label = getCombinedLabel(sequence, ignoreOctave)
 
-      startSession({
-        scaleNotes,
-        centsTolerance,
-        minHoldDetections,
-        ignoreOctave,
-      })
+        startSession({
+          scaleNotes: allNotes,
+          centsTolerance,
+          minHoldDetections,
+          ignoreOctave,
+        })
 
-      // Compute the next scale label for "Coming up" preview
-      const nextStep = sequence.steps.length > 1
-        ? sequence.steps[1]
-        : sequence.steps[0]
-      const nextLabel = getStepLabel(nextStep, ignoreOctave)
+        // Compute next loop label (after shift)
+        let nextLabel: string | null = null
+        const shift = sequence.shiftSemitones ?? 0
+        if (shift !== 0) {
+          const shiftedSteps = sequence.steps.map((s) => {
+            const { pitchClass, octave } = transpose(s.rootNote, s.rootOctave, shift)
+            return { ...s, rootNote: pitchClass, rootOctave: octave, label: undefined, chordSymbol: undefined }
+          })
+          nextLabel = getCombinedLabel({ ...sequence, steps: shiftedSteps }, ignoreOctave)
+        }
 
-      setEndlessState({
-        phase: 'playing',
-        sequence,
-        currentStepIndex: 0,
-        completedLoops: 0,
-        results: [],
-        currentScaleNotes: scaleNotes,
-        currentLabel: label,
-        nextLabel,
-        cumulativeStats: EMPTY_STATS,
-      })
+        setEndlessState({
+          phase: 'playing',
+          sequence,
+          currentStepIndex: 0,
+          completedLoops: 0,
+          results: [],
+          currentScaleNotes: allNotes,
+          currentLabel: label,
+          currentChordSymbol: chordSymbols[0]?.symbol ?? null,
+          chordSymbols,
+          nextLabel,
+          cumulativeStats: EMPTY_STATS,
+        })
+      } else {
+        // Individual mode: one step at a time
+        const step = sequence.steps[0]
+        const { notes: scaleNotes } = buildScaleNotes(step, sequence.direction, sequence.numOctaves)
+        const label = getStepLabel(step, ignoreOctave)
+
+        startSession({
+          scaleNotes,
+          centsTolerance,
+          minHoldDetections,
+          ignoreOctave,
+        })
+
+        const nextStep = sequence.steps.length > 1
+          ? sequence.steps[1]
+          : sequence.steps[0]
+        const nextLabel = getStepLabel(nextStep, ignoreOctave)
+
+        const chordSymbol = getStepChordSymbol(step)
+
+        setEndlessState({
+          phase: 'playing',
+          sequence,
+          currentStepIndex: 0,
+          completedLoops: 0,
+          results: [],
+          currentScaleNotes: scaleNotes,
+          currentLabel: label,
+          currentChordSymbol: chordSymbol,
+          chordSymbols: [{ noteIndex: 0, symbol: chordSymbol }],
+          nextLabel,
+          cumulativeStats: EMPTY_STATS,
+        })
+      }
     },
     [startSession]
   )
@@ -163,32 +232,27 @@ export function useEndlessPractice() {
     const sequence = sequenceRef.current
     if (!sequence) return
 
-    const stepIndex = stepIndexRef.current
-    const step = sequence.steps[stepIndex]
-    const { notes: scaleNotes } = buildScaleNotes(step, sequence.direction, sequence.numOctaves)
+    const ioct = configRef.current.ignoreOctave
 
-    // Capture the result
-    const result: ScaleRunResult = {
-      step,
-      label: getStepLabel(step, configRef.current.ignoreOctave),
-      scaleNotes,
-      score: innerScore,
-      completedAt: Date.now(),
-    }
+    if (isCombinedMode(sequence)) {
+      // Combined mode: entire loop just completed
+      const { notes: allNotes } = buildCombinedLoopNotes(sequence)
 
-    const newResults = [...resultsRef.current, result]
-    resultsRef.current = newResults
-    const stats = computeCumulativeStats(newResults)
+      const result: ScaleRunResult = {
+        step: sequence.steps[0],
+        label: getCombinedLabel(sequence, ioct),
+        scaleNotes: allNotes,
+        score: innerScore,
+        completedAt: Date.now(),
+      }
 
-    // Compute next step info for the transition display
-    let nextStepIndex = stepIndex + 1
-    let nextLoops = loopsRef.current
-    let activeSequence = sequence
-    if (nextStepIndex >= sequence.steps.length) {
-      nextStepIndex = 0
-      nextLoops += 1
+      const newResults = [...resultsRef.current, result]
+      resultsRef.current = newResults
+      const stats = computeCumulativeStats(newResults)
 
-      // Apply shift on loop wrap
+      // Advance loop and apply shift
+      const nextLoops = loopsRef.current + 1
+      let activeSequence = sequence
       const shift = sequence.shiftSemitones ?? 0
       if (shift !== 0 && originalSequenceRef.current) {
         const totalShift = shift * nextLoops
@@ -199,63 +263,164 @@ export function useEndlessPractice() {
         activeSequence = { ...sequence, steps: shiftedSteps }
         sequenceRef.current = activeSequence
       }
-    }
-    const ioct = configRef.current.ignoreOctave
-    const nextStep = activeSequence.steps[nextStepIndex]
-    const nextLabel = getStepLabel(nextStep, ioct)
-    const { notes: nextScaleNotes } = buildScaleNotes(nextStep, activeSequence.direction, activeSequence.numOctaves)
 
-    // Compute the label for the scale AFTER the next one (for "Coming up" during playing)
-    let nextNextStepIndex = nextStepIndex + 1
-    if (nextNextStepIndex >= activeSequence.steps.length) nextNextStepIndex = 0
-    const nextNextLabel = getStepLabel(activeSequence.steps[nextNextStepIndex], ioct)
+      const { notes: nextAllNotes, chordSymbols: nextChordSymbols } = buildCombinedLoopNotes(activeSequence)
+      const nextLabel = getCombinedLabel(activeSequence, ioct)
 
-    const startNextScale = () => {
-      if (stoppedRef.current) return
+      // Compute next-next label for "Coming up" during the next loop
+      let nextNextLabel: string | null = null
+      if (shift !== 0 && originalSequenceRef.current) {
+        const totalShift = shift * (nextLoops + 1)
+        const futureSteps = originalSequenceRef.current.steps.map((step) => {
+          const { pitchClass, octave } = transpose(step.rootNote, step.rootOctave, totalShift)
+          return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined }
+        })
+        nextNextLabel = getCombinedLabel({ ...activeSequence, steps: futureSteps }, ioct)
+      }
 
-      stepIndexRef.current = nextStepIndex
-      loopsRef.current = nextLoops
-      scoreCapturedRef.current = false
+      const startNextLoop = () => {
+        if (stoppedRef.current) return
 
-      startSession({
-        scaleNotes: nextScaleNotes,
-        centsTolerance: configRef.current.centsTolerance,
-        minHoldDetections: configRef.current.minHoldDetections,
-        ignoreOctave: configRef.current.ignoreOctave,
-      })
+        stepIndexRef.current = 0
+        loopsRef.current = nextLoops
+        scoreCapturedRef.current = false
 
-      setEndlessState({
-        phase: 'playing',
-        sequence: activeSequence,
-        currentStepIndex: nextStepIndex,
-        completedLoops: nextLoops,
-        results: newResults,
-        currentScaleNotes: nextScaleNotes,
-        currentLabel: nextLabel,
-        nextLabel: nextNextLabel,
-        cumulativeStats: stats,
-      })
-    }
+        startSession({
+          scaleNotes: nextAllNotes,
+          centsTolerance: configRef.current.centsTolerance,
+          minHoldDetections: configRef.current.minHoldDetections,
+          ignoreOctave: configRef.current.ignoreOctave,
+        })
 
-    // If skipTransition is enabled, go straight to the next scale
-    if (sequence.skipTransition) {
-      startNextScale()
-    } else {
-      // Set transitioning state
+        setEndlessState({
+          phase: 'playing',
+          sequence: activeSequence,
+          currentStepIndex: 0,
+          completedLoops: nextLoops,
+          results: newResults,
+          currentScaleNotes: nextAllNotes,
+          currentLabel: nextLabel,
+          currentChordSymbol: nextChordSymbols[0]?.symbol ?? null,
+          chordSymbols: nextChordSymbols,
+          nextLabel: nextNextLabel,
+          cumulativeStats: stats,
+        })
+      }
+
+      // Always show transition between loops in combined mode
       setEndlessState({
         phase: 'transitioning',
         sequence: activeSequence,
-        currentStepIndex: nextStepIndex,
+        currentStepIndex: 0,
         completedLoops: nextLoops,
         results: newResults,
-        currentScaleNotes: nextScaleNotes,
+        currentScaleNotes: nextAllNotes,
         currentLabel: nextLabel,
+        currentChordSymbol: nextChordSymbols[0]?.symbol ?? null,
+        chordSymbols: nextChordSymbols,
         nextLabel: nextNextLabel,
         cumulativeStats: stats,
       })
 
-      // Schedule the next scale start
-      transitionTimerRef.current = setTimeout(startNextScale, TRANSITION_DURATION_MS)
+      transitionTimerRef.current = setTimeout(startNextLoop, TRANSITION_DURATION_MS)
+    } else {
+      // Individual mode: per-step completion (original behavior)
+      const stepIndex = stepIndexRef.current
+      const step = sequence.steps[stepIndex]
+      const { notes: scaleNotes } = buildScaleNotes(step, sequence.direction, sequence.numOctaves)
+
+      const result: ScaleRunResult = {
+        step,
+        label: getStepLabel(step, ioct),
+        scaleNotes,
+        score: innerScore,
+        completedAt: Date.now(),
+      }
+
+      const newResults = [...resultsRef.current, result]
+      resultsRef.current = newResults
+      const stats = computeCumulativeStats(newResults)
+
+      let nextStepIndex = stepIndex + 1
+      let nextLoops = loopsRef.current
+      let activeSequence = sequence
+      if (nextStepIndex >= sequence.steps.length) {
+        nextStepIndex = 0
+        nextLoops += 1
+
+        const shift = sequence.shiftSemitones ?? 0
+        if (shift !== 0 && originalSequenceRef.current) {
+          const totalShift = shift * nextLoops
+          const shiftedSteps = originalSequenceRef.current.steps.map((step) => {
+            const { pitchClass, octave } = transpose(step.rootNote, step.rootOctave, totalShift)
+            return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined }
+          })
+          activeSequence = { ...sequence, steps: shiftedSteps }
+          sequenceRef.current = activeSequence
+        }
+      }
+
+      const nextStep = activeSequence.steps[nextStepIndex]
+      const nextLabel = getStepLabel(nextStep, ioct)
+      const { notes: nextScaleNotes } = buildScaleNotes(nextStep, activeSequence.direction, activeSequence.numOctaves)
+
+      let nextNextStepIndex = nextStepIndex + 1
+      if (nextNextStepIndex >= activeSequence.steps.length) nextNextStepIndex = 0
+      const nextNextLabel = getStepLabel(activeSequence.steps[nextNextStepIndex], ioct)
+
+      const startNextScale = () => {
+        if (stoppedRef.current) return
+
+        stepIndexRef.current = nextStepIndex
+        loopsRef.current = nextLoops
+        scoreCapturedRef.current = false
+
+        startSession({
+          scaleNotes: nextScaleNotes,
+          centsTolerance: configRef.current.centsTolerance,
+          minHoldDetections: configRef.current.minHoldDetections,
+          ignoreOctave: configRef.current.ignoreOctave,
+        })
+
+        const nextChordSymbol = getStepChordSymbol(nextStep)
+
+        setEndlessState({
+          phase: 'playing',
+          sequence: activeSequence,
+          currentStepIndex: nextStepIndex,
+          completedLoops: nextLoops,
+          results: newResults,
+          currentScaleNotes: nextScaleNotes,
+          currentLabel: nextLabel,
+          currentChordSymbol: nextChordSymbol,
+          chordSymbols: [{ noteIndex: 0, symbol: nextChordSymbol }],
+          nextLabel: nextNextLabel,
+          cumulativeStats: stats,
+        })
+      }
+
+      // skipTransition for single-step sequences (e.g., Blues with shift)
+      if (sequence.skipTransition) {
+        startNextScale()
+      } else {
+        const transitionChordSymbol = getStepChordSymbol(nextStep)
+
+        setEndlessState({
+          phase: 'transitioning',
+          sequence: activeSequence,
+          currentStepIndex: nextStepIndex,
+          completedLoops: nextLoops,
+          results: newResults,
+          currentScaleNotes: nextScaleNotes,
+          currentLabel: nextLabel,
+          currentChordSymbol: transitionChordSymbol,
+          chordSymbols: [{ noteIndex: 0, symbol: transitionChordSymbol }],
+          nextLabel: nextNextLabel,
+          cumulativeStats: stats,
+        })
+
+        transitionTimerRef.current = setTimeout(startNextScale, TRANSITION_DURATION_MS)
+      }
     }
   }, [innerSessionState?.phase, innerScore, startSession])
 

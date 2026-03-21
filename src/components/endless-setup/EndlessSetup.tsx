@@ -1,13 +1,13 @@
-import { useState, useMemo, useEffect, type ReactNode } from 'react'
-import { PRESETS, PRESET_CATEGORIES, SCALE_NAMES } from '@core/endless/presets.ts'
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react'
+import { PRESETS, PRESET_CATEGORIES } from '@core/endless/presets.ts'
 import {
   loadCustomSequences,
   saveCustomSequence,
   deleteCustomSequence,
 } from '@core/endless/storage.ts'
 import type { ScaleSequence, SavedCustomSequence } from '@core/endless/types.ts'
-import type { ScaleInfo, ScaleDirection, Note } from '@core/wasm/types.ts'
-import { buildScale } from '@core/wasm/scales.ts'
+import type { ScaleInfo, ScaleDirection } from '@core/wasm/types.ts'
+import type { NoteDuration } from '@core/rhythm/types.ts'
 import { SequenceBuilder } from './SequenceBuilder.tsx'
 import { StaffPreview } from './StaffPreview.tsx'
 import styles from './EndlessSetup.module.css'
@@ -29,19 +29,6 @@ const SHIFT_OPTIONS = [
   { label: '5ths', value: 7 },
 ] as const
 
-function intervalsToFormula(notes: Note[]): string {
-  if (notes.length < 2) return ''
-  const result: string[] = []
-  for (let i = 0; i < notes.length - 1; i++) {
-    const diff = notes[i + 1].midi - notes[i].midi
-    if (diff === 1) result.push('H')
-    else if (diff === 2) result.push('W')
-    else if (diff === 3) result.push('W+H')
-    else result.push(String(diff))
-  }
-  return result.join(' ')
-}
-
 interface EndlessSetupProps {
   availableScales: ScaleInfo[]
   onStartSequence: (sequence: ScaleSequence) => void
@@ -49,31 +36,62 @@ interface EndlessSetupProps {
   settingsSlot?: ReactNode
   /** When true, hides the "Skip transition screen" toggle (e.g. Rhythm Mode) */
   hideSkipTransition?: boolean
+  /** Note duration for the staff preview (defaults to 'quarter' for scale mode) */
+  noteDuration?: NoteDuration
 }
 
-export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, hideSkipTransition }: EndlessSetupProps) {
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
-  const [presetKey, setPresetKey] = useState('C')
-  const [numOctaves, setNumOctaves] = useState(1)
-  const [shiftSemitones, setShiftSemitones] = useState(0)
+const SCALES_SETUP_KEY = 'practicebuddy:scales:setup'
+
+interface ScalesSetupState {
+  selectedPresetId: string | null
+  presetKey: string
+  numOctaves: number
+  shiftSemitones: number
+  basicScaleTypeIndex: number
+  basicDirection: ScaleDirection
+}
+
+function loadScalesSetup(): Partial<ScalesSetupState> {
+  try {
+    const raw = localStorage.getItem(SCALES_SETUP_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+}
+
+export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, hideSkipTransition, noteDuration }: EndlessSetupProps) {
+  const [saved] = useState(loadScalesSetup)
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(saved.selectedPresetId ?? null)
+  const [presetKey, setPresetKey] = useState(saved.presetKey ?? 'C')
+  const [numOctaves, setNumOctaves] = useState(saved.numOctaves ?? 1)
+  const [shiftSemitones, setShiftSemitones] = useState(saved.shiftSemitones ?? 0)
   const [skipTransition, setSkipTransition] = useState(() => {
     try { return localStorage.getItem('practicebuddy:skipTransition') === 'true' } catch { return false }
   })
-  const [basicScaleTypeIndex, setBasicScaleTypeIndex] = useState(0)
-  const [basicDirection, setBasicDirection] = useState<ScaleDirection>('ascending')
+  const [basicScaleTypeIndex, setBasicScaleTypeIndex] = useState(saved.basicScaleTypeIndex ?? 0)
+  const [basicDirection, setBasicDirection] = useState<ScaleDirection>(saved.basicDirection ?? 'ascending')
+
+  // Persist setup state
+  const persistSetup = useCallback(() => {
+    const state: ScalesSetupState = {
+      selectedPresetId, presetKey, numOctaves, shiftSemitones, basicScaleTypeIndex, basicDirection,
+    }
+    localStorage.setItem(SCALES_SETUP_KEY, JSON.stringify(state))
+  }, [selectedPresetId, presetKey, numOctaves, shiftSemitones, basicScaleTypeIndex, basicDirection])
+
+  useEffect(() => { persistSetup() }, [persistSetup])
   const [customSequences, setCustomSequences] = useState<SavedCustomSequence[]>(
     loadCustomSequences
   )
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingSequence, setEditingSequence] = useState<SavedCustomSequence | undefined>()
-  const [previewStepIndex, setPreviewStepIndex] = useState(0)
   const [showMoreScaleTypes, setShowMoreScaleTypes] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('practicebuddy:skipTransition', String(skipTransition))
   }, [skipTransition])
-
-  useEffect(() => { queueMicrotask(() => setPreviewStepIndex(0)) }, [selectedPresetId, presetKey, basicScaleTypeIndex])
 
   const selectedPreset = PRESETS.find((p) => p.id === selectedPresetId)
   const isBasicPreset = selectedPreset?.category === 'basic'
@@ -149,24 +167,6 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
       {}
     )
   }, [availableScales])
-
-  // Compute preview notes so both columns can use them (must be above early return)
-  const previewStep = useMemo(() => {
-    if (!generatedSequence) return null
-    return generatedSequence.steps[previewStepIndex] ?? generatedSequence.steps[0]
-  }, [generatedSequence, previewStepIndex])
-
-  const previewNotes = useMemo(() => {
-    if (!previewStep) return []
-    const rootStr = `${previewStep.rootNote}${previewStep.rootOctave}`
-    try {
-      const notes = buildScale(rootStr, previewStep.scaleTypeIndex, 'ascending')
-      return notes ?? []
-    } catch (err) {
-      console.error('Scale preview buildScale failed:', rootStr, previewStep.scaleTypeIndex, err)
-      return []
-    }
-  }, [previewStep])
 
   const categoryLabels: Record<string, string> = {
     common: 'Common',
@@ -428,70 +428,25 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
         )}
       </div>}
 
-      {/* Column 3: scale preview */}
-      {selectedPreset && (
+      {/* Column 3: continuous scale preview */}
+      {selectedPreset && generatedSequence && (
       <div className={styles.previewColumn}>
-        {selectedPreset && previewStep && (
-          <>
-            <span className={styles.configLabel}>Scale Preview</span>
-
-            {/* Step navigation — always visible when multiple steps, regardless of note load state */}
-            {generatedSequence && generatedSequence.steps.length > 1 && (
-              <div className={styles.previewNav}>
-                <button
-                  type="button"
-                  className={styles.previewNavBtn}
-                  onClick={() => setPreviewStepIndex(i => Math.max(0, i - 1))}
-                  disabled={previewStepIndex === 0}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
-                <span className={styles.previewNavCounter}>
-                  Step {previewStepIndex + 1} of {generatedSequence.steps.length}
-                </span>
-                <button
-                  type="button"
-                  className={styles.previewNavBtn}
-                  onClick={() => setPreviewStepIndex(i => Math.min(generatedSequence.steps.length - 1, i + 1))}
-                  disabled={previewStepIndex === generatedSequence.steps.length - 1}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-              </div>
-            )}
-
-            {/* Scale name + direction — always visible */}
-            <span className={styles.previewScaleName}>
-              {previewStep.label ?? `${previewStep.rootNote} ${SCALE_NAMES[previewStep.scaleTypeIndex] ?? 'Scale'}`}
-            </span>
-            <span className={styles.previewDirection}>
-              {(isBasicPreset ? basicDirection : generatedSequence?.direction ?? 'ascending') === 'ascending'
-                ? '\u2191 Ascending'
-                : (isBasicPreset ? basicDirection : generatedSequence?.direction ?? 'ascending') === 'descending'
-                ? '\u2193 Descending'
-                : '\u2195 Both directions'}
-            </span>
-
-            {/* Staff — only when notes available */}
-            {previewNotes.length > 0 ? (
-              <>
-                <div className={styles.staffContainer}>
-                  <StaffPreview
-                    notes={previewNotes}
-                    scaleName={previewStep.label ?? `${previewStep.rootNote} ${SCALE_NAMES[previewStep.scaleTypeIndex] ?? 'Scale'}`}
-                    rootPitchClass={previewStep.rootNote}
-                    scaleTypeIndex={previewStep.scaleTypeIndex}
-                  />
-                </div>
-                <span className={styles.previewMeta}>
-                  {previewNotes.length} notes &middot; {intervalsToFormula(previewNotes)}
-                </span>
-              </>
-            ) : (
-              <span className={styles.previewUnavailable}>Preview unavailable</span>
-            )}
-          </>
-        )}
+        <span className={styles.configLabel}>Scale Preview</span>
+        <span className={styles.previewDirection}>
+          {(isBasicPreset ? basicDirection : generatedSequence.direction ?? 'ascending') === 'ascending'
+            ? '\u2191 Ascending'
+            : (isBasicPreset ? basicDirection : generatedSequence.direction ?? 'ascending') === 'descending'
+            ? '\u2193 Descending'
+            : '\u2195 Both directions'}
+          {' \u00B7 '}
+          {generatedSequence.steps.length} {generatedSequence.steps.length === 1 ? 'scale' : 'scales'}
+        </span>
+        <StaffPreview
+          sequence={generatedSequence}
+          direction={isBasicPreset ? basicDirection : generatedSequence.direction}
+          numOctaves={numOctaves}
+          noteDuration={noteDuration}
+        />
       </div>
       )}
     </div>

@@ -1,65 +1,99 @@
+import { useState } from 'react'
 import styles from './HomePage.module.css'
 
-export type PracticeMode = 'scales' | 'rhythm'
+/** Content type — what instrument/theory concept to practice */
+export type PracticeMode = 'scales' | 'arpeggios'
+
+/** Timing mode — how the practice session is paced */
+export type TimingMode = 'follow' | 'rhythm'
 
 interface ModeOption {
-  id: string
+  id: PracticeMode
   title: string
-  description: string
+  followDescription: string
+  rhythmDescription: string
   icon: string
   accentColor: string
   iconBg: string
   disabled?: boolean
+  /** If true, this mode is not available in rhythm timing */
+  noRhythm?: boolean
 }
 
 const MODES: ModeOption[] = [
   {
     id: 'scales',
-    title: 'Scale Practice',
-    description: 'Practice scales with presets or build custom sequences. Loop through keys with circle-of-fifths shifts.',
+    title: 'Scales',
+    followDescription: 'Play scales at your own pace with real-time pitch feedback.',
+    rhythmDescription: 'Play scales in time with the metronome. Scored on pitch and timing.',
     icon: '🎵',
     accentColor: 'var(--color-accent)',
     iconBg: 'rgba(99, 102, 241, 0.1)',
   },
   {
-    id: 'rhythm',
-    title: 'Rhythm Mode',
-    description: 'Play notes in time with the metronome. Scored on both pitch accuracy and timing.',
-    icon: '🥁',
-    accentColor: 'var(--color-warning)',
-    iconBg: 'rgba(245, 158, 11, 0.1)',
-  },
-  {
-    id: 'jazz-standards',
-    title: 'Jazz Standards',
-    description: 'Practice chord changes and common jazz progressions.',
-    icon: '🎷',
-    accentColor: 'rgba(16, 185, 129, 1)',
-    iconBg: 'rgba(16, 185, 129, 0.1)',
-    disabled: true,
+    id: 'arpeggios',
+    title: 'Arpeggios',
+    followDescription: 'Practice arpeggios through chord tones across all keys.',
+    rhythmDescription: 'Play arpeggios in time with the metronome. Scored on pitch and timing.',
+    icon: '🎶',
+    accentColor: 'rgba(6, 182, 212, 1)',
+    iconBg: 'rgba(6, 182, 212, 0.1)',
   },
 ]
 
 interface HomePageProps {
-  onSelectMode: (mode: PracticeMode) => void
+  onSelectMode: (mode: PracticeMode, timing: TimingMode) => void
 }
 
 export function HomePage({ onSelectMode }: HomePageProps) {
+  const [timing, setTiming] = useState<TimingMode>('follow')
+
+  const visibleModes = timing === 'rhythm'
+    ? MODES.filter((m) => !m.noRhythm)
+    : MODES
+
   return (
     <div className={styles.container}>
       <div className={styles.hero}>
         <h2 className={styles.title}>What do you want to practice?</h2>
-        <p className={styles.subtitle}>Choose a practice mode to get started</p>
+        <p className={styles.subtitle}>Choose how you want to play, then pick a mode</p>
       </div>
 
-      <span className={styles.sectionLabel}>Practice Modes</span>
+      {/* Timing toggle */}
+      <div className={styles.toggleWrapper}>
+        <div className={styles.toggle}>
+          <button
+            className={`${styles.toggleOption} ${timing === 'follow' ? styles.toggleOptionActive : ''}`}
+            onClick={() => setTiming('follow')}
+          >
+            <span className={styles.toggleIcon}>🎯</span>
+            Follow
+          </button>
+          <button
+            className={`${styles.toggleOption} ${timing === 'rhythm' ? styles.toggleOptionActive : ''}`}
+            onClick={() => setTiming('rhythm')}
+          >
+            <span className={styles.toggleIcon}>🥁</span>
+            Rhythm
+          </button>
+        </div>
+        <span className={styles.toggleHint}>
+          {timing === 'follow'
+            ? 'Self-paced — play each note until you get it right'
+            : 'Beat-synced — play in time with the metronome'}
+        </span>
+      </div>
+
+      <span className={styles.sectionLabel}>
+        {timing === 'follow' ? 'Follow Mode' : 'Rhythm Mode'}
+      </span>
       <div className={styles.cardGrid}>
-        {MODES.map((mode) => (
+        {visibleModes.map((mode) => (
           <button
             key={mode.id}
             className={`${styles.card} ${mode.disabled ? styles.cardDisabled : ''}`}
             onClick={() => {
-              if (!mode.disabled) onSelectMode(mode.id as PracticeMode)
+              if (!mode.disabled) onSelectMode(mode.id, timing)
             }}
             style={{
               '--card-accent': mode.accentColor,
@@ -74,7 +108,9 @@ export function HomePage({ onSelectMode }: HomePageProps) {
                 <span className={styles.comingSoonBadge}>Coming Soon</span>
               )}
             </div>
-            <div className={styles.cardDescription}>{mode.description}</div>
+            <div className={styles.cardDescription}>
+              {timing === 'follow' ? mode.followDescription : mode.rhythmDescription}
+            </div>
           </button>
         ))}
       </div>

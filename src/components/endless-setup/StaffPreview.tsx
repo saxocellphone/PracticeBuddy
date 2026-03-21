@@ -1,145 +1,261 @@
-import { useEffect, useRef, useState } from 'react'
-import { Renderer, Stave, StaveNote, Voice, Formatter, Accidental } from 'vexflow'
-import type { Note } from '@core/wasm/types.ts'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { buildScaleNotes } from '@core/music/scaleBuilder.ts'
+import { NOTE_DURATION_BEATS } from '@core/rhythm/types.ts'
+import type { NoteDuration } from '@core/rhythm/types.ts'
+import type { Note, ScaleDirection } from '@core/wasm/types.ts'
+import type { ScaleSequence } from '@core/endless/types.ts'
+import { MeasureStaff, ACCIDENTAL_LEFT_MARGIN, getKeySignature, keySignatureWidth } from '@core/notation'
+import type { MeasureLabel } from '@core/notation'
+import styles from './EndlessSetup.module.css'
+
+/**
+ * Minimum pixels per note to avoid cramping.
+ * VexFlow typically uses ~45-55px per note at standard sizes.
+ */
+const MIN_PX_PER_NOTE = 45
+
+/** Extra width added for the bass clef glyph */
+const CLEF_EXTRA_WIDTH = 54
+
+/** Extra width added for the time signature */
+const TIME_SIG_EXTRA_WIDTH = 34
+
+/** Height of each staff line in pixels — must accommodate ledger lines below staff */
+const STAFF_LINE_HEIGHT = 170
+
+/** Default time signature */
+const BEATS_PER_MEASURE = 4
+const BEAT_VALUE = 4
 
 interface StaffPreviewProps {
-  notes: Note[]
-  scaleName: string
-  rootPitchClass: string
-  scaleTypeIndex: number
-}
-
-// Chromatic scale in sharp notation for semitone lookup
-const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
-
-// Normalize flat spellings to sharp for index lookup
-const FLAT_TO_SHARP: Record<string, string> = {
-  'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
-}
-
-// Semitone offset from scale root up to the relative major root.
-// Undefined = no standard major key equivalent (jazz/symmetric scales → no key sig).
-const RELATIVE_MAJOR_OFFSET: Partial<Record<number, number>> = {
-  0:  0,  // Major
-  1:  3,  // Natural Minor
-  2:  3,  // Harmonic Minor (approximate)
-  3:  0,  // Melodic Minor (no standard key sig, show as root major)
-  4:  10, // Dorian        (parent major is whole step below root)
-  5:  8,  // Phrygian      (parent major is major third below root)
-  6:  7,  // Lydian        (parent major is perfect fourth below root)
-  7:  5,  // Mixolydian    (parent major is perfect fifth below root)
-  8:  1,  // Locrian       (parent major is semitone below root)
-  9:  0,  // Major Pentatonic
-  10: 3,  // Minor Pentatonic
-  11: 3,  // Blues
-  17: 5,  // Bebop Dominant (same parent as Mixolydian)
-  // Indices 12–16 (jazz modal / symmetric) → undefined → no key sig shown
-}
-
-// Semitone index → VexFlow key signature string.
-// Where enharmonic ambiguity exists, prefer the conventional spelling
-// (Db over C#, F# over Gb for the 6-accidental keys).
-const MAJOR_KEY_SIG: Record<number, string> = {
-  0:  'C',
-  7:  'G',
-  2:  'D',
-  9:  'A',
-  4:  'E',
-  11: 'B',
-  6:  'F#',
-  5:  'F',
-  10: 'Bb',
-  3:  'Eb',
-  8:  'Ab',
-  1:  'Db',
+  sequence: ScaleSequence | null
+  direction: ScaleDirection
+  numOctaves: number
+  noteDuration?: NoteDuration
 }
 
 /**
- * Return the VexFlow key signature string for a given root + scale type.
- * Returns 'C' (no accidentals shown in key sig) for scales without a
- * standard major-key equivalent.
+ * Build all notes from all steps in a sequence, concatenated into one
+ * continuous array. Also returns which note index each step starts at
+ * so we can position chord symbol labels on the correct measure.
  */
-function getKeySignature(rootPitchClass: string, scaleTypeIndex: number): string {
-  const offset = RELATIVE_MAJOR_OFFSET[scaleTypeIndex]
-  if (offset === undefined) return 'C'
-
-  const normalized = FLAT_TO_SHARP[rootPitchClass] ?? rootPitchClass
-  const rootIdx = CHROMATIC.indexOf(normalized as typeof CHROMATIC[number])
-  if (rootIdx === -1) return 'C'
-
-  const majorRootIdx = (rootIdx + offset) % 12
-  return MAJOR_KEY_SIG[majorRootIdx] ?? 'C'
+function buildAllPreviewNotes(
+  sequence: ScaleSequence,
+  direction: ScaleDirection,
+  numOctaves: number,
+): { notes: Note[]; stepStartNoteIndices: number[] } {
+  const notes: Note[] = []
+  const stepStartNoteIndices: number[] = []
+  for (const step of sequence.steps) {
+    stepStartNoteIndices.push(notes.length)
+    const { notes: stepNotes } = buildScaleNotes(step, direction, numOctaves)
+    notes.push(...stepNotes)
+  }
+  return { notes, stepStartNoteIndices }
 }
 
-/** Convert a Note to VexFlow key string: "c/4", "db/3", "f#/2" etc. */
-function noteToVexKey(note: Note): string {
-  return `${note.pitchClass.toLowerCase()}/${note.octave}`
+/**
+ * Group an array of notes into measures based on time signature and note duration.
+ */
+function groupIntoMeasures(notes: Note[], noteDuration: NoteDuration): Note[][] {
+  const durationBeats = NOTE_DURATION_BEATS[noteDuration]
+  const notesPerMeasure = Math.round(BEATS_PER_MEASURE / durationBeats)
+  const measures: Note[][] = []
+  for (let i = 0; i < notes.length; i += notesPerMeasure) {
+    measures.push(notes.slice(i, i + notesPerMeasure))
+  }
+  return measures
 }
 
-export function StaffPreview({ notes, rootPitchClass, scaleTypeIndex }: StaffPreviewProps) {
+interface StaffLineLayout {
+  /** Measures in this line (each measure is an array of notes) */
+  measures: Note[][]
+  /** Index of the first measure in this line within the overall measure list */
+  startMeasureIndex: number
+  /** Whether this is the first line (shows clef + time signature) */
+  isFirstLine: boolean
+}
+
+/**
+ * Compute how measures are distributed into wrapped lines based on
+ * the available container width.
+ */
+function computeLineLayouts(
+  measures: Note[][],
+  containerWidth: number,
+  baseMeasureWidth: number,
+  keySigExtraWidth: number,
+): StaffLineLayout[] {
+  if (measures.length === 0 || containerWidth <= 0) return []
+
+  const lines: StaffLineLayout[] = []
+  let measureIndex = 0
+
+  while (measureIndex < measures.length) {
+    const isFirstLine = measureIndex === 0
+    let usedWidth = 0
+    const lineMeasures: Note[][] = []
+
+    while (measureIndex < measures.length) {
+      // First measure of the first line gets clef + time sig + key sig extra width
+      // First measure of subsequent lines gets clef extra width only
+      let measureWidth = baseMeasureWidth
+      if (lineMeasures.length === 0) {
+        if (isFirstLine) {
+          measureWidth += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
+        } else {
+          measureWidth += CLEF_EXTRA_WIDTH
+        }
+      }
+
+      if (usedWidth + measureWidth > containerWidth && lineMeasures.length > 0) {
+        break
+      }
+
+      lineMeasures.push(measures[measureIndex])
+      usedWidth += measureWidth
+      measureIndex++
+    }
+
+    lines.push({
+      measures: lineMeasures,
+      startMeasureIndex: measureIndex - lineMeasures.length,
+      isFirstLine,
+    })
+  }
+
+  return lines
+}
+
+export function StaffPreview({
+  sequence,
+  direction,
+  numOctaves,
+  noteDuration = 'quarter',
+}: StaffPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(420)
+  const [containerWidth, setContainerWidth] = useState(0)
 
-  // Track container width via ResizeObserver so VexFlow always has real dimensions
+  // Track container width via ResizeObserver
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width
-      if (w && w > 0) setWidth(w)
+      const width = entries[0]?.contentRect.width
+      if (width && width > 0) setContainerWidth(width)
     })
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
 
-  // Re-render VexFlow whenever notes, width, root, or scale type changes
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el || notes.length === 0 || width === 0) return
-
-    el.innerHTML = ''
-
+  // Build all notes from the sequence
+  const { allNotes, stepStartNoteIndices } = useMemo(() => {
+    if (!sequence) return { allNotes: [] as Note[], stepStartNoteIndices: [] as number[] }
     try {
-      const keySig = getKeySignature(rootPitchClass, scaleTypeIndex)
-      const height = 120
-
-      const renderer = new Renderer(el, Renderer.Backends.SVG)
-      renderer.resize(width, height)
-      const context = renderer.getContext()
-      context.setFont('Arial', 10)
-
-      // Stave with bass clef + key signature
-      const stave = new Stave(10, 10, width - 20)
-      stave.addClef('bass')
-      stave.addKeySignature(keySig)
-      stave.setContext(context).draw()
-
-      // Build notes — no manual accidentals; applyAccidentals handles them
-      const staveNotes = notes.map((note) => (
-        new StaveNote({ keys: [noteToVexKey(note)], duration: 'q', clef: 'bass' })
-      ))
-
-      const voice = new Voice({ numBeats: notes.length, beatValue: 4 })
-      voice.setMode(Voice.Mode.SOFT)
-      voice.addTickables(staveNotes)
-
-      // Let VexFlow compute which accidentals are needed given the key signature
-      Accidental.applyAccidentals([voice], keySig)
-
-      // Extra left margin for clef + key sig (more accidentals = more space needed)
-      const keySigWidth = keySig === 'C' ? 80 : 120
-      new Formatter().joinVoices([voice]).format([voice], width - keySigWidth)
-
-      voice.draw(context, stave)
+      const result = buildAllPreviewNotes(sequence, direction, numOctaves)
+      return { allNotes: result.notes, stepStartNoteIndices: result.stepStartNoteIndices }
     } catch (err) {
-      console.error('StaffPreview render error:', err)
+      console.error('StaffPreview buildAllPreviewNotes failed:', err)
+      return { allNotes: [] as Note[], stepStartNoteIndices: [] as number[] }
     }
-  }, [notes, width, rootPitchClass, scaleTypeIndex])
+  }, [sequence, direction, numOctaves])
+
+  // Group into measures
+  const measures = useMemo(
+    () => groupIntoMeasures(allNotes, noteDuration),
+    [allNotes, noteDuration],
+  )
+
+  // Compute per-note chord symbol labels within each measure
+  const measureLabelsMap = useMemo(() => {
+    if (!sequence) return new Map<number, MeasureLabel[]>()
+    const dBeats = NOTE_DURATION_BEATS[noteDuration]
+    const nPerMeasure = Math.round(BEATS_PER_MEASURE / dBeats)
+    const labels = new Map<number, MeasureLabel[]>()
+    for (let i = 0; i < sequence.steps.length; i++) {
+      const noteIndex = stepStartNoteIndices[i]
+      const measureIndex = Math.floor(noteIndex / nPerMeasure)
+      const noteIndexInMeasure = noteIndex % nPerMeasure
+      const step = sequence.steps[i]
+      if (step.chordSymbol) {
+        const existing = labels.get(measureIndex) ?? []
+        existing.push({ noteIndex: noteIndexInMeasure, text: step.chordSymbol })
+        labels.set(measureIndex, existing)
+      }
+    }
+    return labels
+  }, [sequence, stepStartNoteIndices, noteDuration])
+
+  // Compute key signature from all notes
+  const keySig = useMemo(() => getKeySignature(allNotes), [allNotes])
+  const keySigExtraWidth = keySignatureWidth(keySig.accidentals.length)
+
+  // Compute measure width based on notes per measure so notes aren't cramped
+  const durationBeats = NOTE_DURATION_BEATS[noteDuration]
+  const notesPerMeasure = Math.round(BEATS_PER_MEASURE / durationBeats)
+  const baseMeasureWidth = notesPerMeasure * MIN_PX_PER_NOTE + ACCIDENTAL_LEFT_MARGIN
+
+  // Compute line layouts based on container width
+  const lineLayouts = useMemo(
+    () => computeLineLayouts(measures, containerWidth, baseMeasureWidth, keySigExtraWidth),
+    [measures, containerWidth, baseMeasureWidth, keySigExtraWidth],
+  )
+
+  if (!sequence || allNotes.length === 0) {
+    return (
+      <div ref={containerRef} className={styles.staffPreviewContainer}>
+        <span className={styles.previewUnavailable}>Preview unavailable</span>
+      </div>
+    )
+  }
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', minHeight: '120px', overflow: 'hidden' }}
-    />
+    <div ref={containerRef} className={styles.staffPreviewContainer}>
+      {lineLayouts.map((line, lineIndex) => (
+        <div key={lineIndex} className={styles.staffPreviewLine}>
+          {line.measures.map((measureNotes, measureInLineIndex) => {
+            const globalMeasureIndex = line.startMeasureIndex + measureInLineIndex
+            const isFirstMeasureOfFirstLine = globalMeasureIndex === 0
+            const isFirstMeasureOfLine = measureInLineIndex === 0
+
+            const showClef = isFirstMeasureOfLine
+            const showTimeSignature = isFirstMeasureOfFirstLine
+
+            // Compute width for this measure cell
+            let cellWidth = baseMeasureWidth
+            if (isFirstMeasureOfFirstLine) {
+              cellWidth += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
+            } else if (isFirstMeasureOfLine) {
+              cellWidth += CLEF_EXTRA_WIDTH
+            }
+
+            return (
+              <div
+                key={globalMeasureIndex}
+                className={styles.staffPreviewMeasure}
+                style={{ width: `${cellWidth}px` }}
+              >
+                <MeasureStaff
+                  notes={measureNotes.map((note) => ({
+                    note,
+                    duration: noteDuration,
+                  }))}
+                  showClef={showClef}
+                  showTimeSignature={showTimeSignature}
+                  showKeySignature={isFirstMeasureOfFirstLine}
+                  keySignature={keySig}
+                  beatsPerMeasure={BEATS_PER_MEASURE}
+                  beatValue={BEAT_VALUE}
+                  width={cellWidth}
+                  height={STAFF_LINE_HEIGHT}
+                  showBarline
+                  labels={measureLabelsMap.get(globalMeasureIndex)}
+                />
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
   )
 }

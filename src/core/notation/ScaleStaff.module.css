@@ -21,4 +21,5 @@
 .staffSvg {
   display: block;
   height: auto;
+  max-height: 260px;
 }

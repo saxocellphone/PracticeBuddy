@@ -138,9 +138,9 @@ export function computeLiveFeedback(
   timingWindows: TimingWindows,
   centsTolerance: number,
   ignoreOctave: boolean,
-  currentFeedback: { noteIndex: number; pitchCorrect: boolean; timingResult: TimingResult } | null,
+  currentFeedback: { noteIndex: number; pitchCorrect: boolean; timingResult: TimingResult; timingOffsetMs: number } | null,
   noteIndex: number,
-): { noteIndex: number; pitchCorrect: boolean; timingResult: TimingResult } | null {
+): { noteIndex: number; pitchCorrect: boolean; timingResult: TimingResult; timingOffsetMs: number } | null {
   const alreadyCorrect = currentFeedback?.noteIndex === noteIndex && currentFeedback.pitchCorrect
 
   // Skip if we already confirmed a correct pitch for this note
@@ -153,7 +153,7 @@ export function computeLiveFeedback(
 
   // Show on first detection, or upgrade from wrong to correct
   if (currentFeedback?.noteIndex !== noteIndex || matches) {
-    return { noteIndex, pitchCorrect: matches, timingResult }
+    return { noteIndex, pitchCorrect: matches, timingResult, timingOffsetMs: offsetMs }
   }
 
   return null

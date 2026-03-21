@@ -74,3 +74,27 @@ The primary practice mode. A `ScaleSequence` defines an ordered list of scales t
 ### Persistence
 
 User settings (BPM, metronome toggle, cents tolerance, octave matching) are stored in `localStorage`. Custom scale sequences use `src/core/endless/storage.ts`.
+
+## Agent Team Structure
+
+When working as a team, use these three roles with strict file ownership to prevent conflicts:
+
+### UI Agent
+- **Owns (read/write):** `src/components/`, `src/styles/`, `src/assets/`
+- **Read-only:** `src/hooks/`, `src/core/`, `src/App.tsx`
+- **Role:** Build and modify React components, CSS modules, and UI layout. Define component interfaces and props. When a new hook or core function is needed, describe the required API and create a task for the Logic Agent.
+
+### Logic Agent
+- **Owns (read/write):** `src/hooks/`, `src/core/` (except `src/core/wasm/pkg/`), `crates/core/src/`, `src/App.tsx`, `src/context/`
+- **Read-only:** `src/components/`
+- **Role:** Implement hooks, business logic, state machines, Rust/WASM core, and app-level orchestration. Export the interfaces that components consume. When a UI change is needed, describe it and create a task for the UI Agent.
+
+### Test Agent
+- **Owns (read/write):** `src/__tests__/`, `src/__test-utils__/`, `src/core/__tests__/`, `src/core/metronome/__tests__/`, `src/hooks/__tests__/`, `src/core/rhythm/__tests__/`
+- **Read-only:** everything else
+- **Role:** Write and maintain unit/integration tests. Validate that UI and Logic changes work correctly. Run `npm test` to verify. Never modify production code — if a test reveals a bug, create a task describing the fix for the appropriate agent.
+
+### Coordination Rules
+- **Never edit files you don't own.** If you need a change in another agent's domain, create a task or send a message.
+- **Shared boundaries:** When UI Agent needs a new hook, or Logic Agent needs a new component prop, communicate the interface (types, function signatures) via the task list.
+- **`src/App.tsx`** is owned by Logic Agent since it contains the view state machine, but UI Agent may read it to understand view transitions.

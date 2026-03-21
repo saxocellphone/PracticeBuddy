@@ -35,12 +35,14 @@ interface RhythmResultsProps {
   rhythmState: RhythmEndlessState
   onRetry: () => void
   onGoHome: () => void
+  onBackToSetup?: () => void
 }
 
 export function RhythmResults({
   rhythmState,
   onRetry,
   onGoHome,
+  onBackToSetup,
 }: RhythmResultsProps) {
   const { results, cumulativeStats } = rhythmState
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
@@ -229,6 +231,11 @@ export function RhythmResults({
         <button className={styles.retryButton} onClick={onRetry}>
           Practice Again
         </button>
+        {onBackToSetup && (
+          <button className={styles.secondaryButton} onClick={onBackToSetup}>
+            Change Settings
+          </button>
+        )}
         <button className={styles.secondaryButton} onClick={onGoHome}>
           Home
         </button>
