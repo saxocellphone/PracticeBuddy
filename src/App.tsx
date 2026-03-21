@@ -26,7 +26,7 @@ import { ArpeggioPracticeView } from '@components/arpeggio-practice/ArpeggioPrac
 import { ArpeggioResults } from '@components/arpeggio-results/ArpeggioResults.tsx'
 import type { ScaleSequence } from '@core/endless/types.ts'
 import type { ArpeggioSequence } from '@core/arpeggio/types.ts'
-import { buildAllArpeggioStepsNotes, arpeggioToScaleSequence } from '@core/arpeggio/sequence.ts'
+import { buildAllArpeggioStepsNotes, arpeggioToScaleSequence, expandArpeggioSequence } from '@core/arpeggio/sequence.ts'
 import {
   RHYTHM_DURATION_STORAGE_KEY,
 } from '@core/rhythm/types.ts'
@@ -300,8 +300,9 @@ function MainApp() {
       // Rhythm retry — works for both scales and arpeggios
       if (activeMode === 'arpeggios') {
         if (!arpeggioSequenceRef.current) return
-        const prebuiltNotes = buildAllArpeggioStepsNotes(arpeggioSequenceRef.current, ignoreOctave)
-        const adaptedSequence = arpeggioToScaleSequence(arpeggioSequenceRef.current, ignoreOctave)
+        const expanded = expandArpeggioSequence(arpeggioSequenceRef.current)
+        const prebuiltNotes = buildAllArpeggioStepsNotes(expanded, ignoreOctave)
+        const adaptedSequence = arpeggioToScaleSequence(expanded, ignoreOctave)
         endlessSequenceRef.current = adaptedSequence
         metronomeStop()
         startRhythm(adaptedSequence, bpm, noteDuration, centsTolerance, ignoreOctave, audioCtx ?? undefined, prebuiltNotes)
@@ -369,8 +370,10 @@ function MainApp() {
 
     if (timingMode === 'rhythm') {
       if (!ctx) return
-      const prebuiltNotes = buildAllArpeggioStepsNotes(sequence, ignoreOctave)
-      const adaptedSequence = arpeggioToScaleSequence(sequence, ignoreOctave)
+      // Expand single-step sequences to include all transpositions
+      const expanded = expandArpeggioSequence(sequence)
+      const prebuiltNotes = buildAllArpeggioStepsNotes(expanded, ignoreOctave)
+      const adaptedSequence = arpeggioToScaleSequence(expanded, ignoreOctave)
       endlessSequenceRef.current = adaptedSequence
       metronomeStop()
       startRhythm(adaptedSequence, bpm, noteDuration, centsTolerance, ignoreOctave, ctx, prebuiltNotes)

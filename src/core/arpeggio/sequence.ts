@@ -1,5 +1,6 @@
 import { buildArpeggioNotes } from '@core/music/arpeggioBuilder.ts'
 import { getArpeggioStepLabel } from './presets.ts'
+import { transpose } from '@core/endless/presets.ts'
 import type { Note } from '@core/wasm/types.ts'
 import type { ScaleSequence, ScaleStep } from '@core/endless/types.ts'
 import type { StepBoundary } from '@core/rhythm/types.ts'
@@ -63,4 +64,36 @@ export function arpeggioToScaleSequence(
     skipTransition: sequence.skipTransition,
     steps: sequence.steps.map((step) => toScaleStep(step, ignoreOctave)),
   }
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b)
+}
+
+/**
+ * Expand a single-step arpeggio sequence by applying shiftSemitones to
+ * generate all unique transpositions. For multi-step sequences (jazz
+ * progressions) or shift=0, returns as-is. The returned sequence has
+ * shiftSemitones=0 since all steps are already materialized.
+ */
+export function expandArpeggioSequence(sequence: ArpeggioSequence): ArpeggioSequence {
+  const shift = sequence.shiftSemitones ?? 0
+  if (shift === 0 || sequence.steps.length > 1) return sequence
+
+  const baseStep = sequence.steps[0]
+  if (!baseStep) return sequence
+
+  const numSteps = 12 / gcd(12, shift)
+  const steps: ArpeggioStep[] = []
+  for (let i = 0; i < numSteps; i++) {
+    const totalShift = (i * shift) % 12
+    const { pitchClass, octave } = transpose(baseStep.root, baseStep.rootOctave, totalShift)
+    steps.push({
+      root: pitchClass,
+      rootOctave: octave,
+      arpeggioType: baseStep.arpeggioType,
+    })
+  }
+
+  return { ...sequence, steps, shiftSemitones: 0 }
 }

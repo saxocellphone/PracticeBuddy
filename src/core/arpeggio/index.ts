@@ -25,4 +25,5 @@ export {
 export {
   buildAllArpeggioStepsNotes,
   arpeggioToScaleSequence,
+  expandArpeggioSequence,
 } from './sequence.ts'
