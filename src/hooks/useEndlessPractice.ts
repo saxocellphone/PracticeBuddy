@@ -259,7 +259,7 @@ export function useEndlessPractice() {
         const totalShift = shift * nextLoops
         const shiftedSteps = originalSequenceRef.current.steps.map((step) => {
           const { pitchClass, octave } = transpose(step.rootNote, step.rootOctave, totalShift)
-          return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined }
+          return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined, chordSymbol: undefined }
         })
         activeSequence = { ...sequence, steps: shiftedSteps }
         sequenceRef.current = activeSequence
@@ -274,7 +274,7 @@ export function useEndlessPractice() {
         const totalShift = shift * (nextLoops + 1)
         const futureSteps = originalSequenceRef.current.steps.map((step) => {
           const { pitchClass, octave } = transpose(step.rootNote, step.rootOctave, totalShift)
-          return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined }
+          return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined, chordSymbol: undefined }
         })
         nextNextLabel = getCombinedLabel({ ...activeSequence, steps: futureSteps }, ioct)
       }
@@ -354,7 +354,7 @@ export function useEndlessPractice() {
           const totalShift = shift * nextLoops
           const shiftedSteps = originalSequenceRef.current.steps.map((step) => {
             const { pitchClass, octave } = transpose(step.rootNote, step.rootOctave, totalShift)
-            return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined }
+            return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined, chordSymbol: undefined }
           })
           activeSequence = { ...sequence, steps: shiftedSteps }
           sequenceRef.current = activeSequence

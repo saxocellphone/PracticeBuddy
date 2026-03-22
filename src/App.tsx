@@ -63,7 +63,6 @@ const SETTINGS_KEY = 'practicebuddy:settings'
 
 interface PersistedSettings {
   bpm: number
-  metronomeEnabled: boolean
   centsTolerance: number
   ignoreOctave: boolean
   timingMode: TimingMode
@@ -72,7 +71,6 @@ interface PersistedSettings {
 
 const DEFAULT_SETTINGS: PersistedSettings = {
   bpm: 120,
-  metronomeEnabled: true,
   centsTolerance: 40,
   ignoreOctave: true,
   timingMode: 'follow',
@@ -98,7 +96,6 @@ function loadSettings(): PersistedSettings {
     const parsed = JSON.parse(raw)
     return {
       bpm: typeof parsed.bpm === 'number' && parsed.bpm >= 30 && parsed.bpm <= 300 ? parsed.bpm : DEFAULT_SETTINGS.bpm,
-      metronomeEnabled: typeof parsed.metronomeEnabled === 'boolean' ? parsed.metronomeEnabled : DEFAULT_SETTINGS.metronomeEnabled,
       centsTolerance: typeof parsed.centsTolerance === 'number' && parsed.centsTolerance >= 10 && parsed.centsTolerance <= 100 ? parsed.centsTolerance : DEFAULT_SETTINGS.centsTolerance,
       ignoreOctave: typeof parsed.ignoreOctave === 'boolean' ? parsed.ignoreOctave : DEFAULT_SETTINGS.ignoreOctave,
       timingMode: parsed.timingMode === 'follow' || parsed.timingMode === 'rhythm' ? parsed.timingMode : DEFAULT_SETTINGS.timingMode,
@@ -124,7 +121,6 @@ function MainApp() {
   const [saved] = useState(loadSettings)
   const [view, setView] = useState<AppView>('home')
   const [activeMode, setActiveMode] = useState<PracticeMode>('scales')
-  const [useMetronomeEnabled, setUseMetronomeEnabled] = useState(saved.metronomeEnabled)
   const [centsTolerance, setCentsTolerance] = useState(saved.centsTolerance)
   const [ignoreOctave, setIgnoreOctave] = useState(saved.ignoreOctave)
   const [micSensitivity, setMicSensitivity] = useState(saved.micSensitivity)
@@ -134,8 +130,6 @@ function MainApp() {
 
   // Timing mode: follow (self-paced) or rhythm (beat-synced) — applies to all content types
   const [timingMode, setTimingMode] = useState<TimingMode>(saved.timingMode)
-
-  const [metronomeExpanded, setMetronomeExpanded] = useState(false)
 
   // Audio engine
   const audio = useAudioEngine()
@@ -161,13 +155,12 @@ function MainApp() {
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({
       bpm: metronome.bpm,
-      metronomeEnabled: useMetronomeEnabled,
       centsTolerance,
       ignoreOctave,
       timingMode,
       micSensitivity,
     }))
-  }, [metronome.bpm, useMetronomeEnabled, centsTolerance, ignoreOctave, timingMode, micSensitivity])
+  }, [metronome.bpm, centsTolerance, ignoreOctave, timingMode, micSensitivity])
 
   // Persist rhythm settings
   useEffect(() => {
@@ -236,20 +229,20 @@ function MainApp() {
     if (view !== 'practicing') return
     if (activeMode !== 'scales' || timingMode !== 'follow') return
     if (endlessState?.phase === 'stopped') {
-      if (useMetronomeEnabled) metronomeStop()
+      metronomeStop()
       queueMicrotask(() => setView('results'))
     }
-  }, [view, endlessState?.phase, useMetronomeEnabled, metronomeStop, activeMode, timingMode])
+  }, [view, endlessState?.phase, metronomeStop, activeMode, timingMode])
 
   // Auto-transition to results when stopped (arpeggios follow mode)
   useEffect(() => {
     if (view !== 'practicing') return
     if (activeMode !== 'arpeggios' || timingMode !== 'follow') return
     if (arpeggioState?.phase === 'stopped') {
-      if (useMetronomeEnabled) metronomeStop()
+      metronomeStop()
       queueMicrotask(() => setView('results'))
     }
-  }, [view, arpeggioState?.phase, useMetronomeEnabled, metronomeStop, activeMode, timingMode])
+  }, [view, arpeggioState?.phase, metronomeStop, activeMode, timingMode])
 
   // Auto-transition to results when stopped (rhythm mode, any content type)
   useEffect(() => {
@@ -297,13 +290,10 @@ function MainApp() {
 
     endlessSequenceRef.current = sequence
     startEndless(sequence, centsTolerance, 3, ignoreOctave)
-
-    if (useMetronomeEnabled) {
-      metronomeStart()
-    }
+    metronomeStart()
 
     setView('practicing')
-  }, [audioState, audioInitialize, startEndless, centsTolerance, ignoreOctave, useMetronomeEnabled, metronomeStart])
+  }, [audioState, audioInitialize, startEndless, centsTolerance, ignoreOctave, metronomeStart])
 
   const handleStopPractice = useCallback(() => {
     if (timingMode === 'rhythm') {
@@ -342,16 +332,16 @@ function MainApp() {
     if (activeMode === 'arpeggios') {
       if (!arpeggioSequenceRef.current) return
       startArpeggio(arpeggioSequenceRef.current, centsTolerance, 3, ignoreOctave)
-      if (useMetronomeEnabled) metronomeStart()
+      metronomeStart()
       setView('practicing')
       return
     }
 
     if (!endlessSequenceRef.current) return
     startEndless(endlessSequenceRef.current, centsTolerance, 3, ignoreOctave)
-    if (useMetronomeEnabled) metronomeStart()
+    metronomeStart()
     setView('practicing')
-  }, [activeMode, timingMode, startEndless, startRhythm, startArpeggio, centsTolerance, ignoreOctave, useMetronomeEnabled, metronomeStart, metronomeStop, bpm, noteDuration, audioCtx])
+  }, [activeMode, timingMode, startEndless, startRhythm, startArpeggio, centsTolerance, ignoreOctave, metronomeStart, metronomeStop, bpm, noteDuration, audioCtx])
 
   // Rhythm-specific start handler
   const handleStartRhythmPractice = useCallback(async (sequence: ScaleSequence) => {
@@ -401,11 +391,11 @@ function MainApp() {
       metronomeStart()
     } else {
       startArpeggio(sequence, centsTolerance, 3, ignoreOctave)
-      if (useMetronomeEnabled) metronomeStart()
+      metronomeStart()
     }
 
     setView('practicing')
-  }, [audioCtx, audioState, audioInitialize, startArpeggio, startRhythm, timingMode, centsTolerance, ignoreOctave, useMetronomeEnabled, metronomeStart, metronomeStop, bpm, noteDuration])
+  }, [audioCtx, audioState, audioInitialize, startArpeggio, startRhythm, timingMode, centsTolerance, ignoreOctave, metronomeStart, metronomeStop, bpm, noteDuration])
 
   const handleMetronomeToggle = useCallback(() => {
     if (metronomeIsPlaying) {
@@ -442,51 +432,15 @@ function MainApp() {
         </>
       ) : (
         <>
-          {/* Scale mode: collapsible metronome */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '44px' }}>
-            <input
-              type="checkbox"
-              checked={useMetronomeEnabled}
-              onChange={(e) => setUseMetronomeEnabled(e.target.checked)}
-              style={{ accentColor: 'var(--color-accent)', width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0 }}
-            />
-            <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)', flex: 1 }}>
-              Metronome
-            </span>
-            <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
-              {metronome.bpm} BPM
-            </span>
-            <button
-              onClick={() => setMetronomeExpanded(e => !e)}
-              style={{
-                width: '28px', height: '28px', borderRadius: '14px',
-                border: '1px solid var(--color-border)', background: 'transparent',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--color-text-muted)', fontSize: '16px', lineHeight: 1,
-                flexShrink: 0,
-              }}
-              aria-label="Expand metronome settings"
-            >
-              {metronomeExpanded ? '\u2212' : '+'}
-            </button>
-          </div>
-          <div style={{
-            overflow: 'hidden',
-            maxHeight: metronomeExpanded ? '200px' : '0',
-            transition: 'max-height 240ms ease',
-            display: 'flex', flexDirection: 'column', gap: '8px',
-          }}>
-            {useMetronomeEnabled && (
-              <MetronomeControls
-                bpm={metronome.bpm}
-                isPlaying={metronome.isPlaying}
-                currentBeat={metronome.currentBeat}
-                beatsPerMeasure={metronome.beatsPerMeasure}
-                onBpmChange={metronome.setBpm}
-                onToggle={handleMetronomeToggle}
-              />
-            )}
-          </div>
+          {/* Follow mode: always show metronome */}
+          <MetronomeControls
+            bpm={metronome.bpm}
+            isPlaying={metronome.isPlaying}
+            currentBeat={metronome.currentBeat}
+            beatsPerMeasure={metronome.beatsPerMeasure}
+            onBpmChange={metronome.setBpm}
+            onToggle={handleMetronomeToggle}
+          />
         </>
       )}
 
@@ -592,7 +546,7 @@ function MainApp() {
             />
           )}
 
-          {useMetronomeEnabled && endlessState?.phase !== 'transitioning' && (
+          {endlessState?.phase !== 'transitioning' && (
             <div style={{ padding: '0 var(--space-xl) var(--space-md)' }}>
               <MetronomeControls
                 bpm={metronome.bpm}

@@ -6,10 +6,10 @@
   width: 100%;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 940px) {
   .threeColumnLayout {
     display: grid;
-    grid-template-columns: 280px 420px 1fr;
+    grid-template-columns: 260px 480px 1fr;
     gap: var(--space-xl);
     align-items: flex-start;
   }
