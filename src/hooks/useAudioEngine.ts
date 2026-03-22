@@ -5,6 +5,7 @@ export function useAudioEngine() {
   const [state, setState] = useState<AudioEngineState>('uninitialized')
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null)
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
+  const [gainNode, setGainNode] = useState<GainNode | null>(null)
   const [sampleRate, setSampleRate] = useState(44100)
   const engineRef = useRef<AudioEngine | null>(null)
 
@@ -19,6 +20,7 @@ export function useAudioEngine() {
       // become available after initialize().
       setAudioContext(engine.audioContext)
       setAnalyserNode(engine.analyserNode)
+      setGainNode(engine.gainNode)
       setSampleRate(engine.sampleRate)
     })
 
@@ -49,6 +51,7 @@ export function useAudioEngine() {
     dispose,
     audioContext,
     analyserNode,
+    gainNode,
     sampleRate,
   }
 }

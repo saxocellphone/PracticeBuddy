@@ -295,6 +295,40 @@ describe('evaluateNote', () => {
     // Timing uses closestSample (lowClarity at 15ms)
     expect(result.timingOffsetMs).toBe(15)
   })
+
+  it('scenario 18b: early sample (negative offset) is preferred over later sustain near the beat', () => {
+    // Simulates carry-forward: player attacked 80ms early (look-ahead buffer),
+    // then pitch sustained through the beat at +5ms.
+    const earlySample = makeSample(110, -80, 0.85)    // A2 at -80ms (early attack)
+    const sustainSample = makeSample(110, 5, 0.9)     // A2 at +5ms (sustain)
+
+    const result = evaluateNote(
+      0, A2, 1.0,
+      [earlySample, sustainSample],
+      sustainSample, // closestSample is the sustain
+      TEST_TIMING_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
+    )
+
+    expect(result.pitchCorrect).toBe(true)
+    // Should use the early sample (-80ms), not the sustain (+5ms)
+    expect(result.timingOffsetMs).toBe(-80)
+    // |80ms| > goodMs(90)? No, 80 <= 90 so it's 'good'
+    expect(result.timingResult).toBe('good')
+  })
+
+  it('scenario 18c: single early sample with negative offset grades correctly', () => {
+    const earlySample = makeSample(110, -30, 0.9) // A2 at -30ms early
+    const result = evaluateNote(
+      0, A2, 1.0,
+      [earlySample], earlySample,
+      TEST_TIMING_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
+    )
+
+    expect(result.pitchCorrect).toBe(true)
+    expect(result.timingOffsetMs).toBe(-30)
+    // |30ms| <= perfectMs(40) → perfect
+    expect(result.timingResult).toBe('perfect')
+  })
 })
 
 // ===========================================================================
@@ -430,7 +464,7 @@ describe('live feedback and evaluateNote consistency', () => {
     // higher-clarity samples. evaluateNote then finds a matching sample at 180ms and
     // grades it as 'late'. The hook's evaluateCurrentNote wrapper overrides timing
     // from the stored live feedback, but evaluateNote alone would disagree.
-    const correctEarlySample = makeSample(110, 20, 0.55)   // A2, perfect timing, low clarity
+    // correctEarlySample at 20ms/0.55 clarity was evicted from the buffer
     const correctLateSample = makeSample(110, 180, 0.95)    // A2, late timing, high clarity
 
     // evaluateNote with only the late sample (early one evicted)

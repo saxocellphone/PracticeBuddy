@@ -76,10 +76,12 @@ export function evaluateNote(
     const matches = isPitchMatch(noteResult.note, expectedNote, noteResult.centsOffset, centsTolerance, ignoreOctave)
 
     if (matches) {
-      // Among matching samples, prefer the one closest to scheduled time
+      // Among matching samples, prefer the earliest detection (lowest offsetMs).
+      // This ensures early attacks (negative offsets from look-ahead) are chosen
+      // over later sustain detections (positive offsets near 0).
       if (
         !bestMatch ||
-        Math.abs(sample.offsetMs) < Math.abs(bestMatch.sample.offsetMs)
+        sample.offsetMs < bestMatch.sample.offsetMs
       ) {
         bestMatch = { noteResult, sample }
       }

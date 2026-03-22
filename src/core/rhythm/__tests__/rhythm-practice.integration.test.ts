@@ -449,6 +449,54 @@ describe('timing grading', () => {
 })
 
 // ===========================================================================
+// 6b. Early note detection
+// ===========================================================================
+
+describe('early note detection', () => {
+  it('penalizes a note played early — does not grade as perfect', () => {
+    const hook = renderRhythmHook()
+    startSession(hook)
+    const transitionTime = completeCountdown()
+
+    // Note 0 = C2, Note 1 = D2
+    // Play C2 on the beat (note 0 is correct)
+    setCtxTime(transitionTime + 0.005)
+    act(() => {
+      hook.result.current.processFrame(makePitch(SCALE_NOTES[0].frequency))
+    })
+
+    // Now play D2 early — 80ms before note 1's beat (0.5s).
+    // At this point we're still in note 0's window.
+    const earlyTime = transitionTime + 0.5 - 0.08 // 80ms before note 1
+    setCtxTime(earlyTime)
+    act(() => {
+      hook.result.current.processFrame(makePitch(SCALE_NOTES[1].frequency))
+    })
+
+    // Advance past note 0 boundary → tick evaluates note 0, seeds note 1 with look-ahead
+    setCtxTime(transitionTime + 0.51)
+    act(() => { raf.step() })
+
+    // D2 sustains — fresh detection at +10ms into note 1's window
+    setCtxTime(transitionTime + 0.51)
+    act(() => {
+      hook.result.current.processFrame(makePitch(SCALE_NOTES[1].frequency))
+    })
+
+    // Advance past note 1 boundary so tick evaluates it
+    setCtxTime(transitionTime + 1.01)
+    act(() => { raf.step() })
+
+    const noteEvent = hook.result.current.sessionState?.noteEvents[1]
+    expect(noteEvent?.pitchCorrect).toBe(true)
+    // The timing should reflect the early attack (-80ms), not the sustain (~0ms).
+    // |80ms| > perfectMs(40) so it should NOT be 'perfect'.
+    expect(noteEvent?.timingResult).not.toBe('perfect')
+    expect(noteEvent?.timingOffsetMs).toBeLessThan(0)
+  })
+})
+
+// ===========================================================================
 // 7. Live feedback fires immediately
 // ===========================================================================
 

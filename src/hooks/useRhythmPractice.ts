@@ -15,7 +15,10 @@ import {
   MAX_PITCH_SAMPLES,
   evaluateNote,
   computeLiveFeedback,
+  isPitchMatch,
 } from '@core/rhythm/evaluation.ts'
+import { frequencyToNote } from '@core/wasm/noteUtils.ts'
+import { transpose } from '@core/endless/presets.ts'
 import type { DetectedPitch, Note } from '@core/wasm/types.ts'
 import type { ScaleSequence } from '@core/endless/types.ts'
 import type { PitchSample } from '@core/rhythm/evaluation.ts'
@@ -81,15 +84,21 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
   const pitchSamplesRef = useRef<PitchSample[]>([])
   // Also track the sample closest to the scheduled time, for timing grading
   const closestTimingSampleRef = useRef<PitchSample | null>(null)
+  // Look-ahead buffer: samples that may be early attacks for the NEXT note.
+  // Offsets are pre-computed relative to the next note's scheduled time (negative).
+  const nextNoteSamplesRef = useRef<PitchSample[]>([])
   // Live feedback ref — set immediately on pitch detection, read by the UI
   const liveFeedbackRef = useRef<{ noteIndex: number; pitchCorrect: boolean; timingResult: TimingResult; timingOffsetMs: number } | null>(null)
 
   // Sequence management refs
   const sequenceRef = useRef<ScaleSequence | null>(null)
+  const originalSequenceRef = useRef<ScaleSequence | null>(null)
   const stepIndexRef = useRef(0)
   const loopsRef = useRef(0)
   const resultsRef = useRef<RhythmScaleRunResult[]>([])
   const stepBoundariesRef = useRef<StepBoundary[]>([])
+  const bpmRef = useRef(120)
+  const noteDurationRef = useRef<NoteDuration>('quarter')
 
   // Keep audioContext ref in sync
   useEffect(() => {
@@ -137,13 +146,16 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       ignoreOctaveRef.current,
     )
 
-    // If live feedback confirmed correct pitch, use its timing to stay consistent
+    // If live feedback confirmed correct pitch, use its timing to stay consistent.
+    // But don't override when the evaluation found an early detection (negative
+    // offset from the look-ahead buffer) — that's the actual attack time.
     const feedback = liveFeedbackRef.current
     if (
       feedback &&
       feedback.noteIndex === noteIndex &&
       feedback.pitchCorrect &&
-      result.pitchCorrect
+      result.pitchCorrect &&
+      result.timingOffsetMs >= 0
     ) {
       result.timingResult = feedback.timingResult
       result.timingOffsetMs = feedback.timingOffsetMs
@@ -182,6 +194,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       currentNoteIndexRef.current = 0
       pitchSamplesRef.current = []
       closestTimingSampleRef.current = null
+      nextNoteSamplesRef.current = []
       playingBeatIndexRef.current = 0
 
       // Subscribe to onBeat for the playing phase so the beat dot
@@ -253,8 +266,23 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
         const result = evaluateCurrentNote(prevIndex, prevNote, prevScheduled)
         noteEventsRef.current[prevIndex] = result
 
-        pitchSamplesRef.current = []
-        closestTimingSampleRef.current = null
+        // Seed the new note's buffer with look-ahead samples (early detections).
+        // Only carry forward when advancing by exactly 1 note; if we skip notes
+        // the look-ahead offsets are relative to the wrong beat.
+        if (noteIndex === prevIndex + 1 && nextNoteSamplesRef.current.length > 0) {
+          pitchSamplesRef.current = [...nextNoteSamplesRef.current]
+          let closest: PitchSample | null = null
+          for (const s of pitchSamplesRef.current) {
+            if (!closest || Math.abs(s.offsetMs) < Math.abs(closest.offsetMs)) {
+              closest = s
+            }
+          }
+          closestTimingSampleRef.current = closest
+        } else {
+          pitchSamplesRef.current = []
+          closestTimingSampleRef.current = null
+        }
+        nextNoteSamplesRef.current = []
         currentNoteIndexRef.current = noteIndex
       }
 
@@ -352,7 +380,91 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
     resultsRef.current = newResults
     const stats = computeRhythmCumulativeStats(newResults)
 
-    // Session complete — stop and show results
+    // Check if the sequence has a loop shift — if so, cycle to next key
+    const shift = sequence.shiftSemitones ?? 0
+    if (shift !== 0 && originalSequenceRef.current) {
+      const nextLoops = loopsRef.current + 1
+      loopsRef.current = nextLoops
+
+      // Compute cumulative shift from the original sequence
+      const totalShift = shift * nextLoops
+      const shiftedSteps = originalSequenceRef.current.steps.map((step) => {
+        const { pitchClass, octave } = transpose(step.rootNote, step.rootOctave, totalShift)
+        return { ...step, rootNote: pitchClass, rootOctave: octave, label: undefined }
+      })
+      const shiftedSequence = { ...sequence, steps: shiftedSteps }
+      sequenceRef.current = shiftedSequence
+
+      // Rebuild notes for the shifted sequence
+      const { allNotes: nextNotes, boundaries: nextBoundaries } =
+        buildAllStepsNotes(shiftedSequence, ignoreOctaveRef.current)
+      scaleNotesRef.current = nextNotes
+      stepBoundariesRef.current = nextBoundaries
+
+      // Reset per-run state for the new loop
+      noteEventsRef.current = makeEmptyNoteEvents(nextNotes)
+      currentNoteIndexRef.current = 0
+      stepIndexRef.current = 0
+      pitchSamplesRef.current = []
+      closestTimingSampleRef.current = null
+      nextNoteSamplesRef.current = []
+      liveFeedbackRef.current = null
+
+      const bpm = bpmRef.current
+      const noteDuration = noteDurationRef.current
+      const beatsPerNote = NOTE_DURATION_BEATS[noteDuration]
+      const spn = (60 / bpm) * beatsPerNote
+      secondsPerNoteRef.current = spn
+      timingWindowsRef.current = computeTimingWindows(bpm)
+
+      const firstLabel = nextBoundaries[0]?.label ?? ''
+
+      // Start countdown for the next loop
+      phaseRef.current = 'countdown'
+      countdownBeatsFiredRef.current = 0
+      if (onBeatSubscribeRef.current) {
+        beatUnsubRef.current?.()
+        beatUnsubRef.current = onBeatSubscribeRef.current((_beat: number, time: number) => {
+          handleCountdownBeatRef.current(time)
+        })
+      }
+
+      const ctx = audioContextRef.current
+
+      setSessionState({
+        phase: 'countdown',
+        countdownBeat: COUNTDOWN_BEATS,
+        currentNoteIndex: 0,
+        noteEvents: [...noteEventsRef.current],
+        totalNotes: nextNotes.length,
+        startTime: 0,
+        currentTime: ctx?.currentTime ?? 0,
+        currentBeat: 0,
+        bpm,
+        noteDuration,
+        secondsPerNote: spn,
+        liveFeedback: null,
+      })
+
+      setRhythmState({
+        phase: 'countdown',
+        sequence: shiftedSequence,
+        currentStepIndex: 0,
+        completedLoops: nextLoops,
+        results: newResults,
+        currentScaleNotes: nextNotes,
+        currentLabel: firstLabel,
+        nextLabel: null,
+        cumulativeStats: stats,
+        stepBoundaries: nextBoundaries,
+      })
+
+      // Restart the RAF loop for the countdown → playing tick
+      rafRef.current = requestAnimationFrame(() => tickRef.current())
+      return
+    }
+
+    // No shift — session complete, stop and show results
     stoppedRef.current = true
     beatUnsubRef.current?.()
     beatUnsubRef.current = null
@@ -428,6 +540,26 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
         closestTimingSampleRef.current = sample
       }
 
+      // Look-ahead: if this detection doesn't match the current expected note
+      // and we're within the timing window of the NEXT beat, record it as a
+      // potential early attack for the next note (with negative offset).
+      const nextNoteIdx = currentNoteIndexRef.current + 1
+      if (nextNoteIdx < scaleNotesRef.current.length) {
+        const nextScheduled = startTimeRef.current + nextNoteIdx * spn
+        const earlyOffsetMs = (now - nextScheduled) * 1000
+        if (earlyOffsetMs < 0 && Math.abs(earlyOffsetMs) <= timingWindowsRef.current.lateMs) {
+          const currentExpected = scaleNotesRef.current[currentNoteIndexRef.current]
+          const noteResult = frequencyToNote(pitch.frequency)
+          const matchesCurrent = isPitchMatch(
+            noteResult.note, currentExpected, noteResult.centsOffset,
+            centsToleranceRef.current, ignoreOctaveRef.current,
+          )
+          if (!matchesCurrent) {
+            nextNoteSamplesRef.current.push({ pitch, offsetMs: earlyOffsetMs })
+          }
+        }
+      }
+
       // Live feedback: evaluate immediately so the UI can show results on hit
       const currentIdx = currentNoteIndexRef.current
       const expectedNote = scaleNotesRef.current[currentIdx]
@@ -473,12 +605,15 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       stoppedRef.current = false
 
       sequenceRef.current = sequence
+      originalSequenceRef.current = sequence
       stepIndexRef.current = 0
       loopsRef.current = 0
       resultsRef.current = []
       centsToleranceRef.current = centsTolerance
       ignoreOctaveRef.current = ignoreOctave
       timingWindowsRef.current = computeTimingWindows(bpm)
+      bpmRef.current = bpm
+      noteDurationRef.current = noteDuration
 
       const beatsPerNote = NOTE_DURATION_BEATS[noteDuration]
       const spn = (60 / bpm) * beatsPerNote
@@ -494,6 +629,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       currentNoteIndexRef.current = 0
       pitchSamplesRef.current = []
       closestTimingSampleRef.current = null
+      nextNoteSamplesRef.current = []
 
       const firstLabel = boundaries[0]?.label ?? ''
 

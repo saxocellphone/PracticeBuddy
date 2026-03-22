@@ -335,8 +335,9 @@ fn compute_score(attempts: &[NoteAttempt], total_scale_notes: usize) -> SessionS
         sum / correct_attempts.len() as f64
     };
 
-    let accuracy_percent = if total_scale_notes > 0 {
-        (correct_notes as f64 / total_scale_notes as f64) * 100.0
+    let total_attempts = correct_notes + incorrect_notes;
+    let accuracy_percent = if total_attempts > 0 {
+        (correct_notes as f64 / total_attempts as f64) * 100.0
     } else {
         0.0
     };
@@ -447,7 +448,8 @@ mod tests {
         assert_eq!(score.correct_notes, 4);
         assert_eq!(score.incorrect_notes, 2);
         assert_eq!(score.missed_notes, 4); // 8 total - 4 correct
-        assert!((score.accuracy_percent - 50.0).abs() < 0.01);
+        // accuracy = 4 correct / (4 correct + 2 incorrect) = 66.67%
+        assert!((score.accuracy_percent - 66.67).abs() < 0.1);
     }
 
     #[test]

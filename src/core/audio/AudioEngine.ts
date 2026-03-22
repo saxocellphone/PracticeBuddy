@@ -9,6 +9,7 @@ export class AudioEngine {
   private _state: AudioEngineState = 'uninitialized'
   private _audioContext: AudioContext | null = null
   private _analyserNode: AnalyserNode | null = null
+  private _gainNode: GainNode | null = null
   private _mediaStream: MediaStream | null = null
   private _stateListeners: Set<(state: AudioEngineState) => void> = new Set()
 
@@ -22,6 +23,14 @@ export class AudioEngine {
 
   get analyserNode(): AnalyserNode | null {
     return this._analyserNode
+  }
+
+  get gainNode(): GainNode | null {
+    return this._gainNode
+  }
+
+  get currentGain(): number {
+    return this._gainNode?.gain.value ?? 1.0
   }
 
   get sampleRate(): number {
@@ -55,11 +64,15 @@ export class AudioEngine {
       this._audioContext = new AudioContext()
       const source = this._audioContext.createMediaStreamSource(this._mediaStream)
 
+      this._gainNode = this._audioContext.createGain()
+      this._gainNode.gain.value = 1.0
+
       this._analyserNode = this._audioContext.createAnalyser()
       this._analyserNode.fftSize = 8192
       this._analyserNode.smoothingTimeConstant = 0
 
-      source.connect(this._analyserNode)
+      source.connect(this._gainNode)
+      this._gainNode.connect(this._analyserNode)
 
       // Handle browser autoplay policy
       if (this._audioContext.state === 'suspended') {
@@ -98,6 +111,7 @@ export class AudioEngine {
       this._audioContext = null
     }
     this._analyserNode = null
+    this._gainNode = null
     this.setState('uninitialized')
   }
 }

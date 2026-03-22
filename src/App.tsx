@@ -147,6 +147,7 @@ function MainApp() {
   const { clarityThreshold, powerThreshold } = sensitivityToThresholds(micSensitivity)
   const pitchResult = usePitchDetection({
     analyserNode: audio.analyserNode,
+    gainNode: audio.gainNode,
     sampleRate: audio.sampleRate,
     enabled: view === 'practicing',
     clarityThreshold,

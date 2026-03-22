@@ -20,8 +20,9 @@ function computeCumulativeStats(results: ScaleRunResult[]): CumulativeStats {
   const totalCorrect = results.reduce((sum, r) => sum + r.score.correctNotes, 0)
   const totalIncorrect = results.reduce((sum, r) => sum + r.score.incorrectNotes, 0)
   const totalMissed = results.reduce((sum, r) => sum + r.score.missedNotes, 0)
+  const totalAttempts = totalCorrect + totalIncorrect
   const overallAccuracyPercent =
-    totalNotesAttempted > 0 ? (totalCorrect / totalNotesAttempted) * 100 : 0
+    totalAttempts > 0 ? (totalCorrect / totalAttempts) * 100 : 0
   const weightedCentsSum = results.reduce(
     (sum, r) => sum + r.score.averageCentsOffset * r.score.correctNotes,
     0
