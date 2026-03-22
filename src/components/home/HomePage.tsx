@@ -43,10 +43,17 @@ const MODES: ModeOption[] = [
 
 interface HomePageProps {
   onSelectMode: (mode: PracticeMode, timing: TimingMode) => void
+  initialTimingMode?: TimingMode
+  onTimingModeChange?: (timing: TimingMode) => void
 }
 
-export function HomePage({ onSelectMode }: HomePageProps) {
-  const [timing, setTiming] = useState<TimingMode>('follow')
+export function HomePage({ onSelectMode, initialTimingMode = 'follow', onTimingModeChange }: HomePageProps) {
+  const [timing, setTiming] = useState<TimingMode>(initialTimingMode)
+
+  const handleTimingChange = (newTiming: TimingMode) => {
+    setTiming(newTiming)
+    onTimingModeChange?.(newTiming)
+  }
 
   const visibleModes = timing === 'rhythm'
     ? MODES.filter((m) => !m.noRhythm)
@@ -64,14 +71,14 @@ export function HomePage({ onSelectMode }: HomePageProps) {
         <div className={styles.toggle}>
           <button
             className={`${styles.toggleOption} ${timing === 'follow' ? styles.toggleOptionActive : ''}`}
-            onClick={() => setTiming('follow')}
+            onClick={() => handleTimingChange('follow')}
           >
             <span className={styles.toggleIcon}>🎯</span>
             Follow
           </button>
           <button
             className={`${styles.toggleOption} ${timing === 'rhythm' ? styles.toggleOptionActive : ''}`}
-            onClick={() => setTiming('rhythm')}
+            onClick={() => handleTimingChange('rhythm')}
           >
             <span className={styles.toggleIcon}>🥁</span>
             Rhythm

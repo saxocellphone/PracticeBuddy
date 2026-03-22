@@ -47,7 +47,7 @@ export function computeBeamGeometry(group: NoteLayout[], config: StaffConfig): B
 
   const length = stemLength(config)
 
-  // Compute the stem tip Y for each note (before clamping to the beam line)
+  // Compute the stem tip Y for each note
   const tipYValues = group.map((n) => {
     return beamUp ? n.y - length : n.y + length
   })

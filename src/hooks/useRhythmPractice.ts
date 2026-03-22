@@ -30,7 +30,7 @@ import type {
   RhythmSessionState,
   RhythmPhase,
   RhythmScaleRunResult,
-  RhythmEndlessState,
+  RhythmScaleState,
   StepBoundary,
 } from '@core/rhythm/types.ts'
 
@@ -49,7 +49,7 @@ interface UseRhythmPracticeOptions {
 }
 
 export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPracticeOptions) {
-  const [rhythmState, setRhythmState] = useState<RhythmEndlessState | null>(
+  const [rhythmState, setRhythmState] = useState<RhythmScaleState | null>(
     null,
   )
   const [sessionState, setSessionState] = useState<RhythmSessionState | null>(
@@ -63,6 +63,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
   const noteEventsRef = useRef<RhythmNoteEvent[]>([])
   const currentNoteIndexRef = useRef(0)
   const startTimeRef = useRef(0)
+  const currentTimeRef = useRef(0)
   const secondsPerNoteRef = useRef(0.5)
   const scaleNotesRef = useRef<Note[]>([])
   const centsToleranceRef = useRef(40)
@@ -97,6 +98,8 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
   const loopsRef = useRef(0)
   const resultsRef = useRef<RhythmScaleRunResult[]>([])
   const stepBoundariesRef = useRef<StepBoundary[]>([])
+  const restIndicesRef = useRef<Set<number>>(new Set())
+  const rangeRef = useRef<{ minMidi: number; maxMidi: number } | undefined>(undefined)
   const bpmRef = useRef(120)
   const noteDurationRef = useRef<NoteDuration>('quarter')
 
@@ -263,26 +266,44 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
         const prevNote = scaleNotesRef.current[prevIndex]
         const prevScheduled = startTimeRef.current + prevIndex * spn
 
-        const result = evaluateCurrentNote(prevIndex, prevNote, prevScheduled)
-        noteEventsRef.current[prevIndex] = result
-
-        // Seed the new note's buffer with look-ahead samples (early detections).
-        // Only carry forward when advancing by exactly 1 note; if we skip notes
-        // the look-ahead offsets are relative to the wrong beat.
-        if (noteIndex === prevIndex + 1 && nextNoteSamplesRef.current.length > 0) {
-          pitchSamplesRef.current = [...nextNoteSamplesRef.current]
-          let closest: PitchSample | null = null
-          for (const s of pitchSamplesRef.current) {
-            if (!closest || Math.abs(s.offsetMs) < Math.abs(closest.offsetMs)) {
-              closest = s
-            }
+        if (restIndicesRef.current.has(prevIndex)) {
+          // Rest note — auto-mark, clear buffers
+          noteEventsRef.current[prevIndex] = {
+            noteIndex: prevIndex,
+            expectedNote: prevNote,
+            scheduledTime: prevScheduled,
+            pitchCorrect: true,
+            detectedNote: prevNote,
+            centsOff: 0,
+            timingResult: 'perfect',
+            timingOffsetMs: 0,
           }
-          closestTimingSampleRef.current = closest
-        } else {
           pitchSamplesRef.current = []
           closestTimingSampleRef.current = null
+          nextNoteSamplesRef.current = []
+          liveFeedbackRef.current = null
+        } else {
+          const result = evaluateCurrentNote(prevIndex, prevNote, prevScheduled)
+          noteEventsRef.current[prevIndex] = result
+
+          // Seed the new note's buffer with look-ahead samples (early detections).
+          // Only carry forward when advancing by exactly 1 note; if we skip notes
+          // the look-ahead offsets are relative to the wrong beat.
+          if (noteIndex === prevIndex + 1 && nextNoteSamplesRef.current.length > 0) {
+            pitchSamplesRef.current = [...nextNoteSamplesRef.current]
+            let closest: PitchSample | null = null
+            for (const s of pitchSamplesRef.current) {
+              if (!closest || Math.abs(s.offsetMs) < Math.abs(closest.offsetMs)) {
+                closest = s
+              }
+            }
+            closestTimingSampleRef.current = closest
+          } else {
+            pitchSamplesRef.current = []
+            closestTimingSampleRef.current = null
+          }
+          nextNoteSamplesRef.current = []
         }
-        nextNoteSamplesRef.current = []
         currentNoteIndexRef.current = noteIndex
       }
 
@@ -327,16 +348,21 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
         }
       }
 
-      setSessionState((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentNoteIndex: noteIndex,
-              currentTime: clampedNow,
-              noteEvents: [...noteEventsRef.current],
-            }
-          : prev,
-      )
+      // Only trigger a React re-render when the note index actually changes
+      // or when live feedback is present. currentTime is updated via ref for
+      // the scroll position (direct DOM manipulation in the view component).
+      currentTimeRef.current = clampedNow
+      setSessionState((prev) => {
+        if (!prev) return prev
+        const needsUpdate = prev.currentNoteIndex !== noteIndex
+        if (!needsUpdate) return prev
+        return {
+          ...prev,
+          currentNoteIndex: noteIndex,
+          currentTime: clampedNow,
+          noteEvents: [...noteEventsRef.current],
+        }
+      })
 
       rafRef.current = requestAnimationFrame(() => tickRef.current())
       return
@@ -396,8 +422,9 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       sequenceRef.current = shiftedSequence
 
       // Rebuild notes for the shifted sequence
-      const { allNotes: nextNotes, boundaries: nextBoundaries } =
-        buildAllStepsNotes(shiftedSequence, ignoreOctaveRef.current)
+      const { allNotes: nextNotes, boundaries: nextBoundaries, restIndices: nextRestIndices } =
+        buildAllStepsNotes(shiftedSequence, ignoreOctaveRef.current, noteDurationRef.current, undefined, rangeRef.current)
+      restIndicesRef.current = nextRestIndices
       scaleNotesRef.current = nextNotes
       stepBoundariesRef.current = nextBoundaries
 
@@ -444,6 +471,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
         noteDuration,
         secondsPerNote: spn,
         liveFeedback: null,
+        restIndices: nextRestIndices,
       })
 
       setRhythmState({
@@ -497,6 +525,9 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       ) {
         return
       }
+
+      // Skip pitch processing for rest notes
+      if (restIndicesRef.current.has(currentNoteIndexRef.current)) return
 
       // Clamp to startTimeRef so we never compute a negative elapsed time
       // during the brief look-ahead window after the countdown-to-playing
@@ -593,7 +624,8 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       centsTolerance: number,
       ignoreOctave: boolean,
       explicitAudioContext?: AudioContext,
-      prebuiltNotes?: { allNotes: Note[]; boundaries: StepBoundary[] },
+      prebuiltNotes?: { allNotes: Note[]; boundaries: StepBoundary[]; restIndices?: Set<number> },
+      range?: { minMidi: number; maxMidi: number },
     ) => {
       const ctx = explicitAudioContext ?? audioContextRef.current
       if (!ctx) return
@@ -614,6 +646,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
       timingWindowsRef.current = computeTimingWindows(bpm)
       bpmRef.current = bpm
       noteDurationRef.current = noteDuration
+      rangeRef.current = range
 
       const beatsPerNote = NOTE_DURATION_BEATS[noteDuration]
       const spn = (60 / bpm) * beatsPerNote
@@ -621,9 +654,11 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
 
       // Build notes for ALL steps and concatenate into one continuous run.
       // When prebuiltNotes is provided (e.g. from arpeggio mode), skip building.
-      const { allNotes, boundaries } = prebuiltNotes ?? buildAllStepsNotes(sequence, ignoreOctave)
+      const { allNotes, boundaries, restIndices = new Set<number>() } =
+        prebuiltNotes ?? buildAllStepsNotes(sequence, ignoreOctave, noteDuration, undefined, range)
       scaleNotesRef.current = allNotes
       stepBoundariesRef.current = boundaries
+      restIndicesRef.current = restIndices
 
       noteEventsRef.current = makeEmptyNoteEvents(allNotes)
       currentNoteIndexRef.current = 0
@@ -661,6 +696,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
         noteDuration,
         secondsPerNote: spn,
         liveFeedback: null,
+        restIndices,
       })
 
       setRhythmState({
@@ -716,5 +752,7 @@ export function useRhythmPractice({ audioContext, onBeatSubscribe }: UseRhythmPr
     startRhythm,
     stopRhythm,
     processFrame,
+    /** Ref to current AudioContext time — updated every frame without triggering re-renders */
+    currentTimeRef,
   }
 }

@@ -5,7 +5,11 @@ import {
 } from '@core/arpeggio/presets.ts'
 import type { ArpeggioPresetTemplate } from '@core/arpeggio/presets.ts'
 import type { ArpeggioSequence, ArpeggioStep, ArpeggioDirection } from '@core/arpeggio/types.ts'
-import { transpose } from '@core/endless/presets.ts'
+import { expandSequenceWithLoops } from '@core/music/sequenceExpander.ts'
+import { isArpeggioPlayable } from '@core/music/arpeggioBuilder.ts'
+import type { ClefType } from '@core/instruments.ts'
+import type { NoteDuration } from '@core/rhythm/types.ts'
+import { NOTE_DURATIONS, NOTE_DURATION_LABELS } from '@core/rhythm/types.ts'
 import { ArpeggioStaffPreview } from './ArpeggioStaffPreview.tsx'
 import styles from './ArpeggioSetup.module.css'
 
@@ -13,20 +17,18 @@ const PITCH_CLASSES = [
   'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
 ] as const
 
-const BASS_DEFAULT_OCTAVE = 2
-
 const CATEGORY_ORDER: (keyof typeof ARPEGGIO_PRESET_CATEGORIES)[] = [
   'triads',
   'seventh',
   'jazz',
 ]
 
-const SHIFT_OPTIONS = [
-  { label: 'None', value: 0 },
-  { label: '\u00BD Step', value: 1 },
-  { label: 'Whole Step', value: 2 },
-  { label: '4ths', value: 5 },
-  { label: '5ths', value: 7 },
+const LOOP_OPTIONS = [
+  { label: 'No shift', value: 0 },
+  { label: 'Circle of 4ths', value: 5 },
+  { label: 'Circle of 5ths', value: 7 },
+  { label: 'Chromatic', value: 1 },
+  { label: 'Whole tone', value: 2 },
 ] as const
 
 const DIRECTION_OPTIONS: { label: string; value: ArpeggioDirection }[] = [
@@ -38,6 +40,15 @@ const DIRECTION_OPTIONS: { label: string; value: ArpeggioDirection }[] = [
 interface ArpeggioSetupProps {
   onStart: (sequence: ArpeggioSequence) => void
   settingsSlot?: ReactNode
+  noteDuration?: NoteDuration
+  onNoteDurationChange?: (d: NoteDuration) => void
+  bpm?: number
+  /** Default starting octave for the instrument (defaults to 2 for bass) */
+  defaultOctave?: number
+  /** Clef to use for the staff preview */
+  clef?: ClefType
+  /** MIDI range for the instrument */
+  range?: { minMidi: number; maxMidi: number }
 }
 
 const ARPEGGIO_SETUP_KEY = 'practicebuddy:arpeggios:setup'
@@ -48,6 +59,8 @@ interface ArpeggioSetupState {
   direction: ArpeggioDirection
   shiftSemitones: number
   numOctaves: number
+  loopCount: number
+  shiftUntilKey: string
 }
 
 function loadArpeggioSetup(): Partial<ArpeggioSetupState> {
@@ -60,55 +73,21 @@ function loadArpeggioSetup(): Partial<ArpeggioSetupState> {
   }
 }
 
-/**
- * Expand a base sequence by applying a loop shift to generate all transpositions.
- * If shift is 0 or the base sequence already has multiple steps (jazz progressions),
- * returns the base sequence as-is.
- */
-function expandSequenceForPreview(
-  baseSequence: ArpeggioSequence,
-  shiftSemitones: number,
-): ArpeggioSequence {
-  // For multi-step presets (jazz progressions) or no shift, return as-is
-  if (shiftSemitones === 0 || baseSequence.steps.length > 1) {
-    return baseSequence
-  }
-
-  const baseStep = baseSequence.steps[0]
-  if (!baseStep) return baseSequence
-
-  // Compute how many unique transpositions before cycling back
-  // GCD determines cycle length: 12 / gcd(12, shift)
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
-  const numSteps = 12 / gcd(12, shiftSemitones)
-
-  const steps: ArpeggioStep[] = []
-  for (let i = 0; i < numSteps; i++) {
-    const totalShift = (i * shiftSemitones) % 12
-    const { pitchClass, octave } = transpose(baseStep.root, baseStep.rootOctave, totalShift)
-    steps.push({
-      root: pitchClass,
-      rootOctave: octave,
-      arpeggioType: baseStep.arpeggioType,
-    })
-  }
-
-  return { ...baseSequence, steps }
-}
-
-export function ArpeggioSetup({ onStart, settingsSlot }: ArpeggioSetupProps) {
+export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurationChange, defaultOctave, range }: ArpeggioSetupProps) {
   const [saved] = useState(loadArpeggioSetup)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(saved.selectedPresetId ?? null)
   const [rootKey, setRootKey] = useState(saved.rootKey ?? 'C')
   const [direction, setDirection] = useState<ArpeggioDirection>(saved.direction ?? 'ascending')
   const [shiftSemitones, setShiftSemitones] = useState(saved.shiftSemitones ?? 0)
   const [numOctaves, setNumOctaves] = useState(saved.numOctaves ?? 1)
+  const [loopCount, setLoopCount] = useState(saved.loopCount ?? 1)
+  const [shiftUntilKey, setShiftUntilKey] = useState(saved.shiftUntilKey ?? rootKey)
 
   // Persist setup state
   const persistSetup = useCallback(() => {
-    const state: ArpeggioSetupState = { selectedPresetId, rootKey, direction, shiftSemitones, numOctaves }
+    const state: ArpeggioSetupState = { selectedPresetId, rootKey, direction, shiftSemitones, numOctaves, loopCount, shiftUntilKey }
     localStorage.setItem(ARPEGGIO_SETUP_KEY, JSON.stringify(state))
-  }, [selectedPresetId, rootKey, direction, shiftSemitones, numOctaves])
+  }, [selectedPresetId, rootKey, direction, shiftSemitones, numOctaves, loopCount, shiftUntilKey])
 
   useEffect(() => { persistSetup() }, [persistSetup])
 
@@ -116,14 +95,39 @@ export function ArpeggioSetup({ onStart, settingsSlot }: ArpeggioSetupProps) {
 
   const generatedSequence = useMemo(() => {
     if (!selectedPreset) return null
-    return selectedPreset.generate(rootKey, BASS_DEFAULT_OCTAVE)
-  }, [selectedPreset, rootKey])
+    return selectedPreset.generate(rootKey, (defaultOctave ?? 2))
+  }, [selectedPreset, rootKey, defaultOctave])
 
-  // Expand the sequence for preview based on loop shift
+  // Expand the sequence for preview (applies loop count / shift-until-key)
   const previewSequence = useMemo(() => {
     if (!generatedSequence) return null
-    return expandSequenceForPreview(generatedSequence, shiftSemitones)
-  }, [generatedSequence, shiftSemitones])
+    const withLoopParams = {
+      ...generatedSequence,
+      shiftSemitones,
+      loopCount: shiftSemitones === 0 ? loopCount : undefined,
+      shiftUntilKey: shiftSemitones > 0 ? shiftUntilKey : undefined,
+    }
+    return expandSequenceWithLoops<ArpeggioSequence, ArpeggioStep>(
+      withLoopParams,
+      (step: ArpeggioStep) => ({ root: step.root, octave: step.rootOctave }),
+      (step: ArpeggioStep, pitchClass: string, octave: number) => ({ ...step, root: pitchClass, rootOctave: octave, label: undefined }),
+    )
+  }, [generatedSequence, shiftSemitones, loopCount, shiftUntilKey])
+
+  // Filter octave options to only show playable ones
+  const playableOctaves = useMemo(() => {
+    if (!generatedSequence) return [1, 2, 3]
+    return [1, 2, 3].filter(n =>
+      generatedSequence.steps.every(step => isArpeggioPlayable(step, direction, n, range))
+    )
+  }, [generatedSequence, direction])
+
+  // Auto-adjust numOctaves if current selection is no longer playable
+  useEffect(() => {
+    if (playableOctaves.length > 0 && !playableOctaves.includes(numOctaves)) {
+      setNumOctaves(playableOctaves[playableOctaves.length - 1])
+    }
+  }, [playableOctaves, numOctaves])
 
   const handleStart = () => {
     if (!generatedSequence) return
@@ -132,6 +136,8 @@ export function ArpeggioSetup({ onStart, settingsSlot }: ArpeggioSetupProps) {
       direction,
       shiftSemitones,
       numOctaves,
+      loopCount: shiftSemitones === 0 ? loopCount : undefined,
+      shiftUntilKey: shiftSemitones > 0 ? shiftUntilKey : undefined,
     })
   }
 
@@ -167,7 +173,7 @@ export function ArpeggioSetup({ onStart, settingsSlot }: ArpeggioSetupProps) {
                         setSelectedPresetId(null)
                       } else {
                         setSelectedPresetId(preset.id)
-                        const seq = preset.generate(rootKey, BASS_DEFAULT_OCTAVE)
+                        const seq = preset.generate(rootKey, (defaultOctave ?? 2))
                         setShiftSemitones(seq.shiftSemitones ?? 0)
                       }
                     }}
@@ -219,11 +225,29 @@ export function ArpeggioSetup({ onStart, settingsSlot }: ArpeggioSetupProps) {
               </div>
             </div>
 
+            {/* Note Duration */}
+            {noteDuration && onNoteDurationChange && (
+              <div className={styles.configSection}>
+                <span className={styles.configLabel}>Note Duration</span>
+                <div className={styles.chipRow}>
+                  {NOTE_DURATIONS.map((d) => (
+                    <button
+                      key={d}
+                      className={`${styles.chip} ${noteDuration === d ? styles.chipActive : ''}`}
+                      onClick={() => onNoteDurationChange(d)}
+                    >
+                      {NOTE_DURATION_LABELS[d]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Octaves */}
             <div className={styles.configSection}>
               <span className={styles.configLabel}>Octaves</span>
               <div className={styles.chipRow}>
-                {[1, 2, 3].map((n) => (
+                {playableOctaves.map((n) => (
                   <button
                     key={n}
                     className={`${styles.chip} ${numOctaves === n ? styles.chipActive : ''}`}
@@ -251,20 +275,63 @@ export function ArpeggioSetup({ onStart, settingsSlot }: ArpeggioSetupProps) {
               </div>
             </div>
 
-            {/* Loop Shift */}
+            {/* Loop */}
             <div className={styles.configSection}>
-              <span className={styles.configLabel}>Loop Shift</span>
+              <span className={styles.configLabel}>Loop</span>
               <div className={styles.chipRow}>
-                {SHIFT_OPTIONS.map((opt) => (
+                {LOOP_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     className={`${styles.chip} ${shiftSemitones === opt.value ? styles.chipActive : ''}`}
-                    onClick={() => setShiftSemitones(opt.value)}
+                    onClick={() => {
+                      setShiftSemitones(opt.value)
+                      if (opt.value > 0) setShiftUntilKey(rootKey)
+                    }}
                   >
                     {opt.label}
                   </button>
                 ))}
               </div>
+              {shiftSemitones === 0 ? (
+                <div className={styles.loopSubControl}>
+                  <span className={styles.loopSubLabel}>Repeat</span>
+                  <div className={styles.stepper}>
+                    <button
+                      className={styles.stepperButton}
+                      onClick={() => setLoopCount((c) => Math.max(1, c - 1))}
+                      disabled={loopCount <= 1}
+                    >
+                      &minus;
+                    </button>
+                    <span className={styles.stepperValue}>{loopCount}</span>
+                    <button
+                      className={styles.stepperButton}
+                      onClick={() => setLoopCount((c) => Math.min(12, c + 1))}
+                      disabled={loopCount >= 12}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className={styles.loopSubHint}>
+                    {loopCount === 1 ? 'time' : 'times'}
+                  </span>
+                </div>
+              ) : (
+                <div className={styles.loopSubControl}>
+                  <span className={styles.loopSubLabel}>Until</span>
+                  <div className={styles.chipRow}>
+                    {PITCH_CLASSES.map((pc) => (
+                      <button
+                        key={pc}
+                        className={`${styles.chip} ${styles.chipSmall} ${shiftUntilKey === pc ? styles.chipActive : ''}`}
+                        onClick={() => setShiftUntilKey(pc)}
+                      >
+                        {pc}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Settings slot (metronome, advanced) */}
@@ -280,10 +347,21 @@ export function ArpeggioSetup({ onStart, settingsSlot }: ArpeggioSetupProps) {
       {/* Column 3: preview */}
       {selectedPreset && previewSequence && (
         <div className={styles.previewColumn}>
+          <span className={styles.configLabel}>Arpeggio Preview</span>
+          <span className={styles.previewDirection}>
+            {direction === 'ascending'
+              ? '\u2191 Ascending'
+              : direction === 'descending'
+              ? '\u2193 Descending'
+              : '\u2195 Both directions'}
+            {' \u00B7 '}
+            {previewSequence.steps.length} {previewSequence.steps.length === 1 ? 'arpeggio' : 'arpeggios'}
+          </span>
           <ArpeggioStaffPreview
             sequence={previewSequence}
             direction={direction}
             numOctaves={numOctaves}
+            noteDuration={noteDuration}
           />
         </div>
       )}

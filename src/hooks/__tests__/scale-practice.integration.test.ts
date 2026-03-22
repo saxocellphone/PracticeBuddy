@@ -1,7 +1,7 @@
 /**
- * Integration tests for the endless scale practice flow.
+ * Integration tests for the scale practice flow.
  *
- * Tests the useEndlessPractice hook which orchestrates:
+ * Tests the useScalePractice hook which orchestrates:
  *   - usePracticeSession (WASM session wrapper)
  *   - buildScaleNotes (scale construction)
  *   - Transition timers between scales
@@ -210,7 +210,7 @@ vi.mock('@core/wasm/pitchDetector.ts', () => ({
 // Import under test (after mocks are declared)
 // ---------------------------------------------------------------------------
 
-import { useEndlessPractice } from '../useEndlessPractice.ts'
+import { useScalePractice } from '../useScalePractice.ts'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -233,7 +233,7 @@ const C_MAJOR_NOTES = [
  * Each note needs `minHoldDetections` correct frames to advance.
  */
 function playEntireScale(
-  result: { current: ReturnType<typeof useEndlessPractice> },
+  result: { current: ReturnType<typeof useScalePractice> },
   noteCount: number,
   minHoldDetections: number,
 ) {
@@ -249,7 +249,7 @@ function playEntireScale(
 // Test suite
 // ---------------------------------------------------------------------------
 
-describe('useEndlessPractice — integration', () => {
+describe('useScalePractice — integration', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockScaleNotes = [...C_MAJOR_NOTES]
@@ -261,58 +261,58 @@ describe('useEndlessPractice — integration', () => {
   })
 
   // =========================================================================
-  // 1. Start endless session
+  // 1. Start scale session
   // =========================================================================
 
   describe('starting a session', () => {
     it('sets phase to playing with correct initial state', () => {
       const sequence = makeTestSequence({ steps: 3 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
-      expect(result.current.endlessState).not.toBeNull()
-      expect(result.current.endlessState!.phase).toBe('playing')
-      expect(result.current.endlessState!.currentStepIndex).toBe(0)
-      expect(result.current.endlessState!.currentScaleNotes).toHaveLength(
+      expect(result.current.scaleState).not.toBeNull()
+      expect(result.current.scaleState!.phase).toBe('playing')
+      expect(result.current.scaleState!.currentStepIndex).toBe(0)
+      expect(result.current.scaleState!.currentScaleNotes).toHaveLength(
         C_MAJOR_NOTES.length,
       )
-      expect(result.current.endlessState!.completedLoops).toBe(0)
-      expect(result.current.endlessState!.results).toHaveLength(0)
+      expect(result.current.scaleState!.completedLoops).toBe(0)
+      expect(result.current.scaleState!.results).toHaveLength(0)
     })
 
     it('populates currentLabel from the first step', () => {
       const sequence = makeTestSequence({ steps: 2 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // makeTestSequence generates steps with label "Step N", ignoreOctave strips digits
-      expect(result.current.endlessState!.currentLabel).toBe('Step')
+      expect(result.current.scaleState!.currentLabel).toBe('Step')
     })
 
     it('populates nextLabel from the second step', () => {
       const sequence = makeTestSequence({ steps: 2 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Second step label "Step 2" with ignoreOctave strips digits
-      expect(result.current.endlessState!.nextLabel).toBe('Step')
+      expect(result.current.scaleState!.nextLabel).toBe('Step')
     })
 
     it('inner session starts in Playing phase', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       expect(result.current.innerSessionState).not.toBeNull()
@@ -327,10 +327,10 @@ describe('useEndlessPractice — integration', () => {
   describe('processing frames', () => {
     it('advances after minHoldDetections correct frames', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // First two frames should not yet advance the note
@@ -353,10 +353,10 @@ describe('useEndlessPractice — integration', () => {
 
     it('hold count resets after a note is accepted', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Play through first note (3 frames)
@@ -380,19 +380,19 @@ describe('useEndlessPractice — integration', () => {
     it('captures a result with correct score when scale finishes', () => {
       // Use skipTransition=false so each step is individual
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Play through all notes of the first scale
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
       // After the scale completes, the effect fires and captures a result.
-      expect(result.current.endlessState!.results).toHaveLength(1)
+      expect(result.current.scaleState!.results).toHaveLength(1)
 
-      const capturedResult = result.current.endlessState!.results[0]
+      const capturedResult = result.current.scaleState!.results[0]
       expect(capturedResult.score.totalNotes).toBe(C_MAJOR_NOTES.length)
       expect(capturedResult.score.correctNotes).toBe(C_MAJOR_NOTES.length)
       expect(capturedResult.score.accuracyPercent).toBe(100)
@@ -400,15 +400,15 @@ describe('useEndlessPractice — integration', () => {
 
     it('result contains the step info and label', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
-      const capturedResult = result.current.endlessState!.results[0]
+      const capturedResult = result.current.scaleState!.results[0]
       expect(capturedResult.step.rootNote).toBe('C')
       expect(capturedResult.step.scaleTypeIndex).toBe(0)
       expect(capturedResult.label).toBeTruthy()
@@ -420,69 +420,58 @@ describe('useEndlessPractice — integration', () => {
   // =========================================================================
 
   describe('transitions between scales', () => {
-    it('enters transitioning phase after scale completes', () => {
+    it('immediately advances to playing the next step after scale completes', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
-      expect(result.current.endlessState!.phase).toBe('transitioning')
+      expect(result.current.scaleState!.phase).toBe('playing')
     })
 
     it('advances currentStepIndex during transition to preview next scale', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
       // During transition, the state shows the upcoming step
-      expect(result.current.endlessState!.currentStepIndex).toBe(1)
+      expect(result.current.scaleState!.currentStepIndex).toBe(1)
     })
 
-    it('transitions to playing phase after 2 seconds', () => {
+    it('immediately enters playing phase with next step after scale completes', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
-      expect(result.current.endlessState!.phase).toBe('transitioning')
-
-      // Advance timer by 2000ms (TRANSITION_DURATION_MS)
-      act(() => {
-        vi.advanceTimersByTime(2000)
-      })
-
-      expect(result.current.endlessState!.phase).toBe('playing')
-      expect(result.current.endlessState!.currentStepIndex).toBe(1)
+      expect(result.current.scaleState!.phase).toBe('playing')
+      expect(result.current.scaleState!.currentStepIndex).toBe(1)
     })
 
-    it('starts a new inner session after the transition completes', () => {
+    it('starts a new inner session immediately after scale completes', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
-      act(() => {
-        vi.advanceTimersByTime(2000)
-      })
-
-      // A new inner session should have been started for scale 2
+      // A new inner session should have been started for scale 2 immediately
       expect(result.current.innerSessionState!.phase).toBe('Playing')
       expect(result.current.innerSessionState!.currentNoteIndex).toBe(0)
     })
@@ -495,14 +484,14 @@ describe('useEndlessPractice — integration', () => {
   describe('combined mode (skipTransition with multiple steps)', () => {
     it('combines all step notes into a single session', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Combined mode: 2 steps x 8 notes = 16 total notes in one session
-      expect(result.current.endlessState!.currentScaleNotes).toHaveLength(
+      expect(result.current.scaleState!.currentScaleNotes).toHaveLength(
         C_MAJOR_NOTES.length * 2,
       )
       expect(result.current.innerSessionState!.totalNotes).toBe(
@@ -512,64 +501,60 @@ describe('useEndlessPractice — integration', () => {
 
     it('shows combined label with all step names', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Labels are "Step 1" and "Step 2" with ignoreOctave stripping digits → "Step → Step"
-      expect(result.current.endlessState!.currentLabel).toContain('\u2192')
+      expect(result.current.scaleState!.currentLabel).toContain('\u2192')
     })
 
     it('captures result after completing all combined notes', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Play all combined notes (2 steps x 8 notes)
       playEntireScale(result, C_MAJOR_NOTES.length * 2, 3)
 
-      expect(result.current.endlessState!.results).toHaveLength(1)
-      expect(result.current.endlessState!.results[0].score.totalNotes).toBe(
+      expect(result.current.scaleState!.results).toHaveLength(1)
+      expect(result.current.scaleState!.results[0].score.totalNotes).toBe(
         C_MAJOR_NOTES.length * 2,
       )
     })
 
-    it('shows transition after completing combined loop', () => {
+    it('immediately restarts after completing combined loop', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length * 2, 3)
 
-      // Combined mode transitions between loops
-      expect(result.current.endlessState!.phase).toBe('transitioning')
-      expect(result.current.endlessState!.completedLoops).toBe(1)
+      // Combined mode immediately starts the next loop
+      expect(result.current.scaleState!.phase).toBe('playing')
+      expect(result.current.scaleState!.completedLoops).toBe(1)
     })
 
-    it('starts next combined loop after transition timer', () => {
+    it('starts next combined loop immediately after completing', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length * 2, 3)
 
-      act(() => {
-        vi.advanceTimersByTime(2000)
-      })
-
-      expect(result.current.endlessState!.phase).toBe('playing')
-      expect(result.current.endlessState!.completedLoops).toBe(1)
+      expect(result.current.scaleState!.phase).toBe('playing')
+      expect(result.current.scaleState!.completedLoops).toBe(1)
       expect(result.current.innerSessionState!.phase).toBe('Playing')
       expect(result.current.innerSessionState!.currentNoteIndex).toBe(0)
     })
@@ -582,24 +567,24 @@ describe('useEndlessPractice — integration', () => {
   describe('skipTransition with single step', () => {
     it('goes directly to playing the next loop without transitioning', () => {
       const sequence = makeTestSequence({ steps: 1, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
       // Single-step skipTransition skips the transition screen
-      expect(result.current.endlessState!.phase).toBe('playing')
+      expect(result.current.scaleState!.phase).toBe('playing')
     })
 
     it('starts the inner session for the next loop immediately', () => {
       const sequence = makeTestSequence({ steps: 1, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
@@ -616,10 +601,10 @@ describe('useEndlessPractice — integration', () => {
   describe('stopping during practice', () => {
     it('sets phase to stopped', () => {
       const sequence = makeTestSequence({ steps: 2 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Play a few frames but don't finish
@@ -628,22 +613,22 @@ describe('useEndlessPractice — integration', () => {
       })
 
       act(() => {
-        result.current.stopEndless()
+        result.current.stopScalePractice()
       })
 
-      expect(result.current.endlessState!.phase).toBe('stopped')
+      expect(result.current.scaleState!.phase).toBe('stopped')
     })
 
     it('resets inner session state', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       act(() => {
-        result.current.stopEndless()
+        result.current.stopScalePractice()
       })
 
       // Inner session should be reset (usePracticeSession.resetSession sets state to null)
@@ -655,32 +640,25 @@ describe('useEndlessPractice — integration', () => {
   // 7. Stop during transition
   // =========================================================================
 
-  describe('stopping during transition', () => {
-    it('sets phase to stopped and clears the transition timer', () => {
+  describe('stopping after scale completion', () => {
+    it('sets phase to stopped when stopping after a scale completes', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
-      // Complete the first scale to enter transitioning
+      // Complete the first scale — immediately advances to next step
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
-      expect(result.current.endlessState!.phase).toBe('transitioning')
+      expect(result.current.scaleState!.phase).toBe('playing')
 
-      // Stop while transitioning
+      // Stop during the next step
       act(() => {
-        result.current.stopEndless()
+        result.current.stopScalePractice()
       })
 
-      expect(result.current.endlessState!.phase).toBe('stopped')
-
-      // Advancing timers should NOT start the next scale
-      act(() => {
-        vi.advanceTimersByTime(3000)
-      })
-
-      expect(result.current.endlessState!.phase).toBe('stopped')
+      expect(result.current.scaleState!.phase).toBe('stopped')
     })
   })
 
@@ -691,13 +669,13 @@ describe('useEndlessPractice — integration', () => {
   describe('cumulative stats', () => {
     it('starts with zeroed cumulative stats', () => {
       const sequence = makeTestSequence({ steps: 2 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
-      const stats = result.current.endlessState!.cumulativeStats
+      const stats = result.current.scaleState!.cumulativeStats
       expect(stats.totalScalesCompleted).toBe(0)
       expect(stats.totalNotesAttempted).toBe(0)
       expect(stats.totalCorrect).toBe(0)
@@ -706,15 +684,15 @@ describe('useEndlessPractice — integration', () => {
 
     it('aggregates correctly after completing one scale (individual mode)', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
-      const stats = result.current.endlessState!.cumulativeStats
+      const stats = result.current.scaleState!.cumulativeStats
       expect(stats.totalScalesCompleted).toBe(1)
       expect(stats.totalNotesAttempted).toBe(C_MAJOR_NOTES.length)
       expect(stats.totalCorrect).toBe(C_MAJOR_NOTES.length)
@@ -723,24 +701,19 @@ describe('useEndlessPractice — integration', () => {
 
     it('aggregates correctly after completing two scales (individual mode)', () => {
       const sequence = makeTestSequence({ steps: 3, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
-      // Complete scale 1
+      // Complete scale 1 — immediately advances to scale 2
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
-
-      // Advance past transition
-      act(() => {
-        vi.advanceTimersByTime(2000)
-      })
 
       // Complete scale 2
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
-      const stats = result.current.endlessState!.cumulativeStats
+      const stats = result.current.scaleState!.cumulativeStats
       expect(stats.totalScalesCompleted).toBe(2)
       expect(stats.totalNotesAttempted).toBe(C_MAJOR_NOTES.length * 2)
       expect(stats.totalCorrect).toBe(C_MAJOR_NOTES.length * 2)
@@ -749,31 +722,31 @@ describe('useEndlessPractice — integration', () => {
 
     it('computes weighted average cents offset', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
       // Our mock getScore returns averageCentsOffset = 5
-      const stats = result.current.endlessState!.cumulativeStats
+      const stats = result.current.scaleState!.cumulativeStats
       expect(stats.averageCentsOffset).toBe(5)
     })
 
     it('aggregates stats in combined mode after completing full loop', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: true })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Play all combined notes (2 steps x 8 notes)
       playEntireScale(result, C_MAJOR_NOTES.length * 2, 3)
 
-      const stats = result.current.endlessState!.cumulativeStats
+      const stats = result.current.scaleState!.cumulativeStats
       expect(stats.totalScalesCompleted).toBe(1)
       expect(stats.totalNotesAttempted).toBe(C_MAJOR_NOTES.length * 2)
       expect(stats.totalCorrect).toBe(C_MAJOR_NOTES.length * 2)
@@ -788,10 +761,10 @@ describe('useEndlessPractice — integration', () => {
   describe('ignoreOctave configuration', () => {
     it('passes ignoreOctave=true through to the inner session', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // Verify the mock session received the config with ignoreOctave
@@ -802,10 +775,10 @@ describe('useEndlessPractice — integration', () => {
 
     it('passes ignoreOctave=false through to the inner session', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, false)
+        result.current.startScalePractice(sequence, 40, 3, false)
       })
 
       expect(activeMockSession!._config).not.toBeNull()
@@ -816,26 +789,26 @@ describe('useEndlessPractice — integration', () => {
       // Create a sequence where step labels include octave numbers
       const sequence = makeTestSequence({ steps: 1 })
       // makeTestSequence steps have label "Step 1" — the "1" is stripped
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       // "Step 1" with digits stripped becomes "Step"
-      expect(result.current.endlessState!.currentLabel).toBe('Step')
+      expect(result.current.scaleState!.currentLabel).toBe('Step')
     })
 
     it('preserves octave digits in labels when ignoreOctave is false', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, false)
+        result.current.startScalePractice(sequence, 40, 3, false)
       })
 
       // "Step 1" is preserved as-is
-      expect(result.current.endlessState!.currentLabel).toBe('Step 1')
+      expect(result.current.scaleState!.currentLabel).toBe('Step 1')
     })
   })
 
@@ -846,30 +819,27 @@ describe('useEndlessPractice — integration', () => {
   describe('edge cases', () => {
     it('wraps around to step 0 after completing all steps (individual mode)', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
-      // Complete step 0 -> transition -> step 1
+      // Complete step 0 -> immediately advances to step 1
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
-      act(() => { vi.advanceTimersByTime(2000) })
       // Complete step 1 -> wraps to step 0
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
 
-      act(() => { vi.advanceTimersByTime(2000) })
-
-      expect(result.current.endlessState!.currentStepIndex).toBe(0)
-      expect(result.current.endlessState!.completedLoops).toBe(1)
+      expect(result.current.scaleState!.currentStepIndex).toBe(0)
+      expect(result.current.scaleState!.completedLoops).toBe(1)
     })
 
     it('skipNote advances without requiring hold detections', () => {
       const sequence = makeTestSequence({ steps: 1 })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
       expect(result.current.innerSessionState!.currentNoteIndex).toBe(0)
@@ -883,39 +853,39 @@ describe('useEndlessPractice — integration', () => {
 
     it('starting a new session clears previous results and state', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: false })
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       // First session
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
       playEntireScale(result, C_MAJOR_NOTES.length, 3)
-      expect(result.current.endlessState!.results).toHaveLength(1)
+      expect(result.current.scaleState!.results).toHaveLength(1)
 
       // Start a new session — should reset
       act(() => {
-        result.current.startEndless(sequence, 40, 3, true)
+        result.current.startScalePractice(sequence, 40, 3, true)
       })
 
-      expect(result.current.endlessState!.results).toHaveLength(0)
-      expect(result.current.endlessState!.currentStepIndex).toBe(0)
-      expect(result.current.endlessState!.phase).toBe('playing')
+      expect(result.current.scaleState!.results).toHaveLength(0)
+      expect(result.current.scaleState!.currentStepIndex).toBe(0)
+      expect(result.current.scaleState!.phase).toBe('playing')
     })
 
-    it('endlessState is null before starting any session', () => {
-      const { result } = renderHook(() => useEndlessPractice())
-      expect(result.current.endlessState).toBeNull()
+    it('scaleState is null before starting any session', () => {
+      const { result } = renderHook(() => useScalePractice())
+      expect(result.current.scaleState).toBeNull()
     })
 
     it('processFrame is safe to call when no session is active', () => {
-      const { result } = renderHook(() => useEndlessPractice())
+      const { result } = renderHook(() => useScalePractice())
 
       // Should not throw
       act(() => {
         result.current.processFrame(makePitch(130.81))
       })
 
-      expect(result.current.endlessState).toBeNull()
+      expect(result.current.scaleState).toBeNull()
     })
   })
 })

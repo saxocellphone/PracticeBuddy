@@ -27,13 +27,14 @@ function toScaleStep(step: ArpeggioStep, ignoreOctave: boolean): ScaleStep {
 export function buildAllArpeggioStepsNotes(
   sequence: ArpeggioSequence,
   ignoreOctave: boolean,
+  range?: { minMidi: number; maxMidi: number },
 ): { allNotes: Note[]; boundaries: StepBoundary[] } {
   const allNotes: Note[] = []
   const boundaries: StepBoundary[] = []
 
   for (const step of sequence.steps) {
     const startIndex = allNotes.length
-    const { notes } = buildArpeggioNotes(step, sequence.direction, sequence.numOctaves ?? 1)
+    const { notes } = buildArpeggioNotes(step, sequence.direction, sequence.numOctaves ?? 1, range)
     allNotes.push(...notes)
     boundaries.push({
       step: toScaleStep(step, ignoreOctave),

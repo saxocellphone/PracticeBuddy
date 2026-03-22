@@ -1,6 +1,16 @@
 import type { Note } from '@core/wasm/types.ts'
 import type { ScaleSequence, ScaleStep, CumulativeStats } from '@core/endless/types.ts'
 
+// ---- Scale start position ----
+
+export type ScaleStartPosition = 'strong-beat' | 'next-measure' | 'immediately'
+
+export const SCALE_START_LABELS: Record<ScaleStartPosition, string> = {
+  'strong-beat': 'Next strong beat (1 & 3)',
+  'next-measure': 'Next measure',
+  'immediately': 'Immediately',
+}
+
 // ---- Note duration ----
 
 export type NoteDuration = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
@@ -155,6 +165,8 @@ export interface RhythmSessionState {
     timingResult: TimingResult
     timingOffsetMs: number
   } | null
+  /** Indices of rest-padding notes that should not be evaluated for pitch */
+  restIndices: Set<number>
 }
 
 // ---- Rhythm cumulative stats ----
@@ -197,7 +209,7 @@ export interface StepBoundary {
   endNoteIndex: number
 }
 
-export interface RhythmEndlessState {
+export interface RhythmScaleState {
   phase: RhythmPhase | 'transitioning'
   sequence: ScaleSequence
   currentStepIndex: number

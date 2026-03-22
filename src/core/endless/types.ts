@@ -1,6 +1,6 @@
 import type { ScaleDirection, SessionScore, Note } from '@core/wasm/types.ts'
 
-/** A single scale in an endless sequence */
+/** A single scale in a scale sequence */
 export interface ScaleStep {
   rootNote: string
   rootOctave: number
@@ -30,6 +30,10 @@ export interface ScaleSequence {
   skipTransition?: boolean
   /** Number of octaves to play (1-3). Defaults to 1. */
   numOctaves?: number
+  /** How many times to repeat the sequence when shiftSemitones is 0. Defaults to 1. */
+  loopCount?: number
+  /** Pitch class to stop shifting at (e.g., "Eb"). Computes transpositions from first step's root to this key. */
+  shiftUntilKey?: string
 }
 
 /** A preset template that generates a ScaleSequence for a given key */
@@ -42,7 +46,7 @@ export interface PresetTemplate {
   generate: (rootNote: string, rootOctave: number, scaleTypeIndex?: number) => ScaleSequence
 }
 
-/** Score for a single completed scale within an endless run */
+/** Score for a single completed scale within a practice run */
 export interface ScaleRunResult {
   step: ScaleStep
   label: string
@@ -51,7 +55,7 @@ export interface ScaleRunResult {
   completedAt: number
 }
 
-export type EndlessPhase = 'idle' | 'playing' | 'transitioning' | 'stopped'
+export type ScalePhase = 'idle' | 'playing' | 'transitioning' | 'stopped'
 
 export interface CumulativeStats {
   totalScalesCompleted: number
@@ -63,8 +67,8 @@ export interface CumulativeStats {
   averageCentsOffset: number
 }
 
-export interface EndlessSessionState {
-  phase: EndlessPhase
+export interface ScaleSessionState {
+  phase: ScalePhase
   sequence: ScaleSequence
   currentStepIndex: number
   completedLoops: number
@@ -77,6 +81,7 @@ export interface EndlessSessionState {
   chordSymbols: PositionedChordSymbol[]
   nextLabel: string | null
   cumulativeStats: CumulativeStats
+  restIndices?: Set<number>
 }
 
 /** Persisted custom sequence */

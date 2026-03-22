@@ -3,9 +3,9 @@ export type {
   ScaleSequence,
   PresetTemplate,
   ScaleRunResult,
-  EndlessPhase,
+  ScalePhase,
   CumulativeStats,
-  EndlessSessionState,
+  ScaleSessionState,
   SavedCustomSequence,
 } from './types.ts'
 

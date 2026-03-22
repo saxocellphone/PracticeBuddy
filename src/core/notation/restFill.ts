@@ -1,7 +1,7 @@
 import type { RestLayout } from './types.ts'
 
-/** Candidate rest durations in descending order (whole, half, quarter, eighth, sixteenth). */
-const REST_CANDIDATES = [4, 2, 1, 0.5, 0.25] as const
+/** Candidate rest durations in descending order, including dotted values. */
+const REST_CANDIDATES = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.375, 0.25] as const
 
 /**
  * Find the largest rest that fits the remaining beats at the current beat position.

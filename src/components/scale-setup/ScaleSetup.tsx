@@ -5,31 +5,32 @@ import {
   saveCustomSequence,
   deleteCustomSequence,
 } from '@core/endless/storage.ts'
-import type { ScaleSequence, SavedCustomSequence } from '@core/endless/types.ts'
+import type { ScaleSequence, ScaleStep, SavedCustomSequence } from '@core/endless/types.ts'
+import { isScalePlayable } from '@core/music/scaleBuilder.ts'
+import { expandSequenceWithLoops } from '@core/music/sequenceExpander.ts'
+import type { ClefType } from '@core/instruments.ts'
 import type { ScaleInfo, ScaleDirection } from '@core/wasm/types.ts'
-import type { NoteDuration } from '@core/rhythm/types.ts'
+import { NOTE_DURATIONS, NOTE_DURATION_LABELS } from '@core/rhythm/types.ts'
+import type { NoteDuration, ScaleStartPosition } from '@core/rhythm/types.ts'
 import { SequenceBuilder } from './SequenceBuilder.tsx'
 import { StaffPreview } from './StaffPreview.tsx'
-import styles from './EndlessSetup.module.css'
+import styles from './ScaleSetup.module.css'
 
 const PITCH_CLASSES = [
   'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
 ] as const
 
-// Default bass starting octave — auto-adjusted by buildScaleNotes to fit range
-const BASS_DEFAULT_OCTAVE = 2
-
 const CATEGORY_ORDER: (keyof typeof PRESET_CATEGORIES)[] = ['basic', 'jazz', 'theory', 'technique']
 
-const SHIFT_OPTIONS = [
-  { label: 'None', value: 0 },
-  { label: '\u00BD Step', value: 1 },
-  { label: 'Whole Step', value: 2 },
-  { label: '4ths', value: 5 },
-  { label: '5ths', value: 7 },
+const LOOP_OPTIONS = [
+  { label: 'No shift', value: 0 },
+  { label: 'Circle of 4ths', value: 5 },
+  { label: 'Circle of 5ths', value: 7 },
+  { label: 'Chromatic', value: 1 },
+  { label: 'Whole tone', value: 2 },
 ] as const
 
-interface EndlessSetupProps {
+interface ScaleSetupProps {
   availableScales: ScaleInfo[]
   onStartSequence: (sequence: ScaleSequence) => void
   /** Slot for metronome / advanced settings controls rendered in the config panel */
@@ -38,6 +39,18 @@ interface EndlessSetupProps {
   hideSkipTransition?: boolean
   /** Note duration for the staff preview (defaults to 'quarter' for scale mode) */
   noteDuration?: NoteDuration
+  /** Callback when note duration changes */
+  onNoteDurationChange?: (d: NoteDuration) => void
+  /** Current BPM for the note duration picker display */
+  bpm?: number
+  /** Where the next scale starts relative to the previous one */
+  scaleStartPosition?: ScaleStartPosition
+  /** Default starting octave for the instrument (defaults to 2 for bass) */
+  defaultOctave?: number
+  /** Clef to use for the staff preview */
+  clef?: ClefType
+  /** MIDI range for the instrument */
+  range?: { minMidi: number; maxMidi: number }
 }
 
 const SCALES_SETUP_KEY = 'practicebuddy:scales:setup'
@@ -49,6 +62,8 @@ interface ScalesSetupState {
   shiftSemitones: number
   basicScaleTypeIndex: number
   basicDirection: ScaleDirection
+  loopCount: number
+  shiftUntilKey: string
 }
 
 function loadScalesSetup(): Partial<ScalesSetupState> {
@@ -61,15 +76,17 @@ function loadScalesSetup(): Partial<ScalesSetupState> {
   }
 }
 
-export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, hideSkipTransition, noteDuration }: EndlessSetupProps) {
+export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, noteDuration, onNoteDurationChange, scaleStartPosition, defaultOctave, clef, range }: ScaleSetupProps) {
   const [saved] = useState(loadScalesSetup)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(saved.selectedPresetId ?? null)
   const [presetKey, setPresetKey] = useState(saved.presetKey ?? 'C')
   const [numOctaves, setNumOctaves] = useState(saved.numOctaves ?? 1)
   const [shiftSemitones, setShiftSemitones] = useState(saved.shiftSemitones ?? 0)
-  const [skipTransition, setSkipTransition] = useState(() => {
+  const [loopCount, setLoopCount] = useState(saved.loopCount ?? 1)
+  const [shiftUntilKey, setShiftUntilKey] = useState(saved.shiftUntilKey ?? presetKey)
+  const skipTransition = (() => {
     try { return localStorage.getItem('practicebuddy:skipTransition') === 'true' } catch { return false }
-  })
+  })()
   const [basicScaleTypeIndex, setBasicScaleTypeIndex] = useState(saved.basicScaleTypeIndex ?? 0)
   const [basicDirection, setBasicDirection] = useState<ScaleDirection>(saved.basicDirection ?? 'ascending')
 
@@ -77,9 +94,10 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
   const persistSetup = useCallback(() => {
     const state: ScalesSetupState = {
       selectedPresetId, presetKey, numOctaves, shiftSemitones, basicScaleTypeIndex, basicDirection,
+      loopCount, shiftUntilKey,
     }
     localStorage.setItem(SCALES_SETUP_KEY, JSON.stringify(state))
-  }, [selectedPresetId, presetKey, numOctaves, shiftSemitones, basicScaleTypeIndex, basicDirection])
+  }, [selectedPresetId, presetKey, numOctaves, shiftSemitones, basicScaleTypeIndex, basicDirection, loopCount, shiftUntilKey])
 
   useEffect(() => { persistSetup() }, [persistSetup])
   const [customSequences, setCustomSequences] = useState<SavedCustomSequence[]>(
@@ -98,18 +116,52 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
 
   const generatedSequence = useMemo(() => {
     if (!selectedPreset) return null
-    return selectedPreset.generate(presetKey, BASS_DEFAULT_OCTAVE, isBasicPreset ? basicScaleTypeIndex : undefined)
-  }, [selectedPreset, presetKey, isBasicPreset, basicScaleTypeIndex])
+    return selectedPreset.generate(presetKey, (defaultOctave ?? 2), isBasicPreset ? basicScaleTypeIndex : undefined)
+  }, [selectedPreset, presetKey, isBasicPreset, basicScaleTypeIndex, defaultOctave])
+
+  // Expand the generated sequence for the preview (applies loop count / shift-until-key)
+  const previewSequence = useMemo(() => {
+    if (!generatedSequence) return null
+    const withLoopParams = {
+      ...generatedSequence,
+      shiftSemitones,
+      loopCount: shiftSemitones === 0 ? loopCount : undefined,
+      shiftUntilKey: shiftSemitones > 0 ? shiftUntilKey : undefined,
+    }
+    return expandSequenceWithLoops<ScaleSequence, ScaleStep>(
+      withLoopParams,
+      (step: ScaleStep) => ({ root: step.rootNote, octave: step.rootOctave }),
+      (step: ScaleStep, pitchClass: string, octave: number) => ({ ...step, rootNote: pitchClass, rootOctave: octave, label: undefined, chordSymbol: undefined }),
+    )
+  }, [generatedSequence, shiftSemitones, loopCount, shiftUntilKey])
+
+  // Filter octave options to only show playable ones for the current sequence
+  const playableOctaves = useMemo(() => {
+    if (!generatedSequence) return [1, 2, 3]
+    const direction = basicDirection
+    return [1, 2, 3].filter(n =>
+      generatedSequence.steps.every(step => isScalePlayable(step, direction, n, range))
+    )
+  }, [generatedSequence, isBasicPreset, basicDirection])
+
+  // Auto-adjust numOctaves if current selection is no longer playable
+  useEffect(() => {
+    if (playableOctaves.length > 0 && !playableOctaves.includes(numOctaves)) {
+      setNumOctaves(playableOctaves[playableOctaves.length - 1])
+    }
+  }, [playableOctaves, numOctaves])
 
   const handleStartPreset = () => {
     if (generatedSequence) {
-      const direction = isBasicPreset ? basicDirection : generatedSequence.direction
+      const direction = basicDirection
       onStartSequence({
         ...generatedSequence,
         direction,
         shiftSemitones,
         skipTransition,
         numOctaves,
+        loopCount: shiftSemitones === 0 ? loopCount : undefined,
+        shiftUntilKey: shiftSemitones > 0 ? shiftUntilKey : undefined,
       })
     }
   }
@@ -215,7 +267,7 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
                         setSelectedPresetId(null)
                       } else {
                         setSelectedPresetId(preset.id)
-                        const seq = preset.generate(presetKey, BASS_DEFAULT_OCTAVE)
+                        const seq = preset.generate(presetKey, (defaultOctave ?? 2))
                         setShiftSemitones(seq.shiftSemitones ?? 0)
                       }
                     }}
@@ -308,11 +360,29 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
               </div>
             </div>
 
+            {/* Note Duration */}
+            {noteDuration && onNoteDurationChange && (
+              <div className={styles.configSection}>
+                <span className={styles.configLabel}>Note Duration</span>
+                <div className={styles.chipRow}>
+                  {NOTE_DURATIONS.map((d) => (
+                    <button
+                      key={d}
+                      className={`${styles.chip} ${noteDuration === d ? styles.chipActive : ''}`}
+                      onClick={() => onNoteDurationChange(d)}
+                    >
+                      {NOTE_DURATION_LABELS[d]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Octaves */}
             <div className={styles.configSection}>
               <span className={styles.configLabel}>Octaves</span>
               <div className={styles.chipRow}>
-                {[1, 2, 3].map((n) => (
+                {playableOctaves.map((n) => (
                   <button
                     key={n}
                     className={`${styles.chip} ${numOctaves === n ? styles.chipActive : ''}`}
@@ -345,7 +415,7 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
                     </button>
                   </div>
                   {Object.entries(scalesByCategory).map(([category, scales]) => {
-                    const isMore = category === 'modes' || category === 'jazz'
+                    const isMore = category === 'modes' || category === 'jazz' || category === 'pentatonic' || category === 'blues'
                     const isSelectedHere = scales.some(s => s.index === basicScaleTypeIndex)
                     if (isMore && !showMoreScaleTypes && !isSelectedHere) return null
                     return (
@@ -369,51 +439,83 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
                   })}
                 </div>
 
-                <div className={styles.configSection}>
-                  <span className={styles.configLabel}>Direction</span>
-                  <div className={styles.chipRow}>
-                    {(['ascending', 'descending', 'both'] as ScaleDirection[]).map((dir) => (
-                      <button
-                        key={dir}
-                        className={`${styles.chip} ${basicDirection === dir ? styles.chipActive : ''}`}
-                        onClick={() => setBasicDirection(dir)}
-                      >
-                        {dir === 'ascending' ? '\u2191 Up' : dir === 'descending' ? '\u2193 Down' : '\u2195 Both'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
 
-            {/* Loop Shift */}
+            {/* Direction — available for all presets */}
             <div className={styles.configSection}>
-              <span className={styles.configLabel}>Loop Shift</span>
+              <span className={styles.configLabel}>Direction</span>
               <div className={styles.chipRow}>
-                {SHIFT_OPTIONS.map((opt) => (
+                {(['ascending', 'descending', 'both'] as ScaleDirection[]).map((dir) => (
                   <button
-                    key={opt.value}
-                    className={`${styles.chip} ${shiftSemitones === opt.value ? styles.chipActive : ''}`}
-                    onClick={() => setShiftSemitones(opt.value)}
+                    key={dir}
+                    className={`${styles.chip} ${basicDirection === dir ? styles.chipActive : ''}`}
+                    onClick={() => setBasicDirection(dir)}
                   >
-                    {opt.label}
+                    {dir === 'ascending' ? '\u2191 Up' : dir === 'descending' ? '\u2193 Down' : '\u2195 Both'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Non-basic presets: skip transition */}
-            {!isBasicPreset && !hideSkipTransition && (
-              <label className={styles.toggleRow}>
-                <input
-                  type="checkbox"
-                  checked={skipTransition}
-                  onChange={(e) => setSkipTransition(e.target.checked)}
-                  className={styles.toggleCheckbox}
-                />
-                Skip transition screen
-              </label>
-            )}
+            {/* Loop */}
+            <div className={styles.configSection}>
+              <span className={styles.configLabel}>Loop</span>
+              <div className={styles.chipRow}>
+                {LOOP_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`${styles.chip} ${shiftSemitones === opt.value ? styles.chipActive : ''}`}
+                    onClick={() => {
+                      setShiftSemitones(opt.value)
+                      if (opt.value > 0) setShiftUntilKey(presetKey)
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {shiftSemitones === 0 ? (
+                <div className={styles.loopSubControl}>
+                  <span className={styles.loopSubLabel}>Repeat</span>
+                  <div className={styles.stepper}>
+                    <button
+                      className={styles.stepperButton}
+                      onClick={() => setLoopCount((c) => Math.max(1, c - 1))}
+                      disabled={loopCount <= 1}
+                    >
+                      &minus;
+                    </button>
+                    <span className={styles.stepperValue}>{loopCount}</span>
+                    <button
+                      className={styles.stepperButton}
+                      onClick={() => setLoopCount((c) => Math.min(12, c + 1))}
+                      disabled={loopCount >= 12}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className={styles.loopSubHint}>
+                    {loopCount === 1 ? 'time' : 'times'}
+                  </span>
+                </div>
+              ) : (
+                <div className={styles.loopSubControl}>
+                  <span className={styles.loopSubLabel}>Until</span>
+                  <div className={styles.chipRow}>
+                    {PITCH_CLASSES.map((pc) => (
+                      <button
+                        key={pc}
+                        className={`${styles.chip} ${styles.chipSmall} ${shiftUntilKey === pc ? styles.chipActive : ''}`}
+                        onClick={() => setShiftUntilKey(pc)}
+                      >
+                        {pc}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Metronome / advanced settings slot */}
             {settingsSlot}
@@ -429,23 +531,26 @@ export function EndlessSetup({ availableScales, onStartSequence, settingsSlot, h
       </div>}
 
       {/* Column 3: continuous scale preview */}
-      {selectedPreset && generatedSequence && (
+      {selectedPreset && previewSequence && (
       <div className={styles.previewColumn}>
         <span className={styles.configLabel}>Scale Preview</span>
         <span className={styles.previewDirection}>
-          {(isBasicPreset ? basicDirection : generatedSequence.direction ?? 'ascending') === 'ascending'
+          {(basicDirection) === 'ascending'
             ? '\u2191 Ascending'
-            : (isBasicPreset ? basicDirection : generatedSequence.direction ?? 'ascending') === 'descending'
+            : (basicDirection) === 'descending'
             ? '\u2193 Descending'
             : '\u2195 Both directions'}
           {' \u00B7 '}
-          {generatedSequence.steps.length} {generatedSequence.steps.length === 1 ? 'scale' : 'scales'}
+          {previewSequence.steps.length} {previewSequence.steps.length === 1 ? 'scale' : 'scales'}
         </span>
         <StaffPreview
-          sequence={generatedSequence}
-          direction={isBasicPreset ? basicDirection : generatedSequence.direction}
+          sequence={previewSequence}
+          direction={basicDirection}
           numOctaves={numOctaves}
           noteDuration={noteDuration}
+          scaleStartPosition={scaleStartPosition}
+          clef={clef}
+          range={range}
         />
       </div>
       )}

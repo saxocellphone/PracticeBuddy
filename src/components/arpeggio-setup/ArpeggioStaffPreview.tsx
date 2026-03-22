@@ -3,14 +3,16 @@ import { buildArpeggioNotes } from '@core/music/arpeggioBuilder.ts'
 import { getArpeggioStepLabel } from '@core/arpeggio/presets.ts'
 import type { Note } from '@core/wasm/types.ts'
 import type { ArpeggioSequence, ArpeggioDirection } from '@core/arpeggio/types.ts'
-import { MeasureStaff, ACCIDENTAL_LEFT_MARGIN, getKeySignature, keySignatureWidth } from '@core/notation'
+import type { NoteDuration } from '@core/rhythm/types.ts'
+import { NOTE_DURATION_BEATS } from '@core/rhythm/types.ts'
+import { MeasureStaff, ACCIDENTAL_LEFT_MARGIN, getKeySignature, getKeySignatureForScale, keySignatureWidth } from '@core/notation'
 import type { MeasureLabel } from '@core/notation'
 import styles from './ArpeggioSetup.module.css'
 
 const MIN_PX_PER_NOTE = 45
 const CLEF_EXTRA_WIDTH = 54
 const TIME_SIG_EXTRA_WIDTH = 34
-const STAFF_LINE_HEIGHT = 170
+const STAFF_LINE_HEIGHT = 230
 const BEATS_PER_MEASURE = 4
 const BEAT_VALUE = 4
 
@@ -18,6 +20,7 @@ interface ArpeggioStaffPreviewProps {
   sequence: ArpeggioSequence | null
   direction: ArpeggioDirection
   numOctaves?: number
+  noteDuration?: NoteDuration
 }
 
 function buildAllPreviewNotes(
@@ -35,8 +38,7 @@ function buildAllPreviewNotes(
   return { notes, stepStartNoteIndices }
 }
 
-function groupIntoMeasures(notes: Note[]): Note[][] {
-  const notesPerMeasure = BEATS_PER_MEASURE
+function groupIntoMeasures(notes: Note[], notesPerMeasure: number): Note[][] {
   const measures: Note[][] = []
   for (let i = 0; i < notes.length; i += notesPerMeasure) {
     measures.push(notes.slice(i, i + notesPerMeasure))
@@ -99,6 +101,7 @@ export function ArpeggioStaffPreview({
   sequence,
   direction,
   numOctaves = 1,
+  noteDuration = 'quarter',
 }: ArpeggioStaffPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -125,12 +128,15 @@ export function ArpeggioStaffPreview({
     }
   }, [sequence, direction, numOctaves])
 
-  const measures = useMemo(() => groupIntoMeasures(allNotes), [allNotes])
+  const noteDurationBeats = NOTE_DURATION_BEATS[noteDuration]
+  const notesPerMeasure = Math.round(BEATS_PER_MEASURE / noteDurationBeats)
+
+  const measures = useMemo(() => groupIntoMeasures(allNotes, notesPerMeasure), [allNotes, notesPerMeasure])
 
   // Compute per-note chord symbol labels within each measure
   const measureLabelsMap = useMemo(() => {
     if (!sequence) return new Map<number, MeasureLabel[]>()
-    const nPerMeasure = BEATS_PER_MEASURE
+    const nPerMeasure = notesPerMeasure
     const labels = new Map<number, MeasureLabel[]>()
     for (let i = 0; i < sequence.steps.length; i++) {
       const noteIndex = stepStartNoteIndices[i]
@@ -143,10 +149,17 @@ export function ArpeggioStaffPreview({
     return labels
   }, [sequence, stepStartNoteIndices])
 
-  const keySig = useMemo(() => getKeySignature(allNotes), [allNotes])
+  const keySig = useMemo(() => {
+    if (sequence && sequence.steps.length > 0) {
+      const root = sequence.steps[0].root
+      const cofKeySig = getKeySignatureForScale(root, 'Major')
+      if (cofKeySig) return cofKeySig
+    }
+    return getKeySignature(allNotes)
+  }, [sequence, allNotes])
   const keySigExtraWidth = keySignatureWidth(keySig.accidentals.length)
 
-  const baseMeasureWidth = BEATS_PER_MEASURE * MIN_PX_PER_NOTE + ACCIDENTAL_LEFT_MARGIN
+  const baseMeasureWidth = notesPerMeasure * MIN_PX_PER_NOTE + ACCIDENTAL_LEFT_MARGIN
 
   const lineLayouts = useMemo(
     () => computeLineLayouts(measures, containerWidth, baseMeasureWidth, keySigExtraWidth),
@@ -163,7 +176,23 @@ export function ArpeggioStaffPreview({
 
   return (
     <div ref={containerRef} className={styles.staffPreviewContainer}>
-      {lineLayouts.map((line, lineIndex) => (
+      {lineLayouts.map((line, lineIndex) => {
+        // Compute total natural width of this line to determine stretch factor
+        let lineNaturalWidth = 0
+        for (let mi = 0; mi < line.measures.length; mi++) {
+          const gmi = line.startMeasureIndex + mi
+          let w = baseMeasureWidth
+          if (gmi === 0) w += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
+          else if (mi === 0) w += CLEF_EXTRA_WIDTH
+          lineNaturalWidth += w
+        }
+        // Stretch to fill the container (but don't stretch more than 1.5x)
+        const isLastLine = lineIndex === lineLayouts.length - 1
+        const stretch = containerWidth > 0 && !isLastLine && lineNaturalWidth < containerWidth
+          ? Math.min(containerWidth / lineNaturalWidth, 1.5)
+          : 1
+
+        return (
         <div key={lineIndex} className={styles.staffPreviewLine}>
           {line.measures.map((measureNotes, measureInLineIndex) => {
             const globalMeasureIndex = line.startMeasureIndex + measureInLineIndex
@@ -176,6 +205,7 @@ export function ArpeggioStaffPreview({
             } else if (isFirstMeasureOfLine) {
               cellWidth += CLEF_EXTRA_WIDTH
             }
+            cellWidth = Math.round(cellWidth * stretch)
 
             return (
               <div
@@ -186,7 +216,7 @@ export function ArpeggioStaffPreview({
                 <MeasureStaff
                   notes={measureNotes.map((note) => ({
                     note,
-                    duration: 'quarter',
+                    duration: noteDuration,
                   }))}
                   showClef={isFirstMeasureOfLine}
                   showTimeSignature={isFirstMeasureOfFirstLine}
@@ -197,13 +227,15 @@ export function ArpeggioStaffPreview({
                   width={cellWidth}
                   height={STAFF_LINE_HEIGHT}
                   showBarline
+                  showFinalBarline={globalMeasureIndex === measures.length - 1}
                   labels={measureLabelsMap.get(globalMeasureIndex)}
                 />
               </div>
             )
           })}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -1,21 +1,21 @@
 import { useState } from 'react'
-import type { EndlessSessionState } from '@core/endless/types.ts'
-import styles from './EndlessResults.module.css'
+import type { ScaleSessionState } from '@core/endless/types.ts'
+import styles from './ScaleResults.module.css'
 
-interface EndlessResultsProps {
-  endlessState: EndlessSessionState
+interface ScaleResultsProps {
+  scaleState: ScaleSessionState
   onRetry: () => void
   onGoHome: () => void
   onBackToSetup?: () => void
 }
 
-export function EndlessResults({
-  endlessState,
+export function ScaleResults({
+  scaleState,
   onRetry,
   onGoHome,
   onBackToSetup,
-}: EndlessResultsProps) {
-  const { results, cumulativeStats } = endlessState
+}: ScaleResultsProps) {
+  const { results, cumulativeStats } = scaleState
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
 
   const accuracyColor =

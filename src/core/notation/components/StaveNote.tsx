@@ -21,6 +21,9 @@ import {
   GLYPH_FLAG_8TH_DOWN,
   GLYPH_FLAG_16TH_UP,
   GLYPH_FLAG_16TH_DOWN,
+  GLYPH_NOTEHEAD_WHOLE,
+  GLYPH_NOTEHEAD_HALF,
+  GLYPH_NOTEHEAD_FILLED,
 } from '../glyphs.ts'
 
 interface StaveNoteProps {
@@ -31,6 +34,8 @@ interface StaveNoteProps {
   isBeamed?: boolean
   /** SVG filter ID for glow effect on active notes. */
   glowFilterId?: string
+  /** When true, per-note accidentals are not rendered (e.g. when a key signature covers them). */
+  hideAccidentals?: boolean
 }
 
 export function StaveNote({
@@ -39,11 +44,12 @@ export function StaveNote({
   color,
   isBeamed = false,
   glowFilterId,
+  hideAccidentals = false,
 }: StaveNoteProps) {
   const { note, duration, x, y, index } = layout
   const noteColor = color ?? config.colors.note
   const ledgerLines = getLedgerLines(y, config)
-  const accidental = getAccidental(note.pitchClass)
+  const accidental = hideAccidentals ? null : getAccidental(note.pitchClass)
   const up = stemUp(y, config)
   const showStem = hasStem(duration) && !isBeamed
   const ls = config.lineSpacing
@@ -75,42 +81,22 @@ export function StaveNote({
         <FlatGlyph x={x - nr - 12} y={y} color={noteColor} config={config} />
       )}
 
-      {/* Note head */}
-      {duration === 'whole' ? (
-        // Whole note: large hollow ellipse with thicker stroke
-        <ellipse
-          cx={x}
-          cy={y}
-          rx={nr + 2}
-          ry={nr - 1}
-          fill="none"
-          stroke={noteColor}
-          strokeWidth={2.2}
-          transform={`rotate(-20, ${x}, ${y})`}
-        />
-      ) : duration === 'half' ? (
-        // Half note: hollow ellipse
-        <ellipse
-          cx={x}
-          cy={y}
-          rx={nr + 1}
-          ry={nr - 2}
-          fill="none"
-          stroke={noteColor}
-          strokeWidth={2}
-          transform={`rotate(-20, ${x}, ${y})`}
-        />
-      ) : (
-        // Quarter, eighth, sixteenth: filled ellipse
-        <ellipse
-          cx={x}
-          cy={y}
-          rx={nr + 1}
-          ry={nr - 2}
-          fill={noteColor}
-          transform={`rotate(-20, ${x}, ${y})`}
-        />
-      )}
+      {/* Note head — Bravura SMuFL glyphs */}
+      <text
+        x={x}
+        y={y}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill={noteColor}
+        fontSize={config.lineSpacing * 3.6}
+        fontFamily={NOTATION_FONT_FAMILY}
+      >
+        {duration === 'whole'
+          ? GLYPH_NOTEHEAD_WHOLE
+          : duration === 'half'
+          ? GLYPH_NOTEHEAD_HALF
+          : GLYPH_NOTEHEAD_FILLED}
+      </text>
 
       {/* Stem (skipped for beamed notes — the Beam component draws those) */}
       {showStem && (

@@ -1,34 +1,46 @@
 /**
- * ScaleStaff -- renders a full scale as a horizontal scrolling staff.
+ * ScaleStaff -- renders a scale as wrapped sheet music with measure lines.
  *
- * Drop-in replacement for the former StaffNotation component. Uses
- * DEFAULT_SCALE_CONFIG and composes Stave, StaveNote, and NoteLabel
- * building blocks. Includes auto-scroll to the current note, key
- * signature computation, and per-note coloring for past/current/future.
+ * Notes are grouped into measures, measures wrap across multiple lines
+ * based on container width, and each measure is rendered using MeasureStaff.
+ * Includes auto-scroll to the line containing the current note, key
+ * signature computation, per-note coloring (past/current/future), and
+ * chord symbol positioning.
  */
 
-import { useEffect, useId, useRef, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import type { ClefType } from '@core/instruments.ts'
 import type { Note } from '@core/wasm/types.ts'
+import type { NoteDuration } from '@core/rhythm/types.ts'
+import { NOTE_DURATION_BEATS } from '@core/rhythm/types.ts'
 import type { PositionedChordSymbol } from '@core/endless/types.ts'
-import type { StaffConfig } from './types.ts'
-import { DEFAULT_SCALE_CONFIG, staffHeight } from './config.ts'
-import { getKeySignature } from './keySignature.ts'
-import { formatScaleNotes } from './formatter.ts'
-import { getAccidental } from './accidental.ts'
-import { stemUp } from './stem.ts'
-import { getLedgerLines } from './pitch.ts'
-import { Stave } from './components/Stave.tsx'
-import { SharpGlyph } from './glyphs/SharpGlyph.tsx'
-import { FlatGlyph } from './glyphs/FlatGlyph.tsx'
+import type { MeasureLabel } from './MeasureStaff.tsx'
+import { MeasureStaff } from './MeasureStaff.tsx'
+import { getKeySignature, getKeySignatureForScale } from './keySignature.ts'
 import { keySignatureWidth } from './glyphs/keySignatureLayout.ts'
+import { ACCIDENTAL_LEFT_MARGIN } from './components/staveLayout.ts'
 import styles from './ScaleStaff.module.css'
 
-/** Horizontal distance between note centers. */
-const NOTE_SPACING = 56
-/** Right margin at the end of the SVG. */
-const RIGHT_MARGIN = 30
-/** Bottom margin below the staff — room for ledger lines on low bass notes. */
-const STAFF_BOTTOM_MARGIN = 40
+/** Minimum pixels per note to avoid cramping. */
+const MIN_PX_PER_NOTE = 45
+
+/** Extra width for the bass clef glyph. */
+const CLEF_EXTRA_WIDTH = 54
+
+/** Extra width for the time signature. */
+const TIME_SIG_EXTRA_WIDTH = 34
+
+/** Height of each staff line in pixels. */
+const STAFF_LINE_HEIGHT = 230
+
+/** Default time signature. */
+const BEATS_PER_MEASURE = 4
+const BEAT_VALUE = 4
+
+/** Per-note colors for practice mode. */
+const COLOR_PAST = '#16a34a'
+const COLOR_CURRENT = '#4f46e5'
+const COLOR_FUTURE = '#b0b0c0'
 
 interface ScaleStaffProps {
   scaleNotes: Note[]
@@ -37,13 +49,84 @@ interface ScaleStaffProps {
   chordSymbol?: string
   /** Positioned chord symbols for combined mode (multiple scales in one staff) */
   chordSymbols?: PositionedChordSymbol[]
+  /** Duration for rendered notes (default: 'quarter') */
+  noteDuration?: NoteDuration
+  /** Root pitch class for circle-of-fifths key signature (e.g. "Gb", "F#") */
+  rootPitchClass?: string
+  /** Scale type display name for key signature computation (e.g. "Major", "Dorian") */
+  scaleTypeName?: string
+  /** Note indices that are rests (for strong-beat alignment padding) */
+  restIndices?: Set<number>
+  /** Override the clef type (defaults to bass) */
+  clef?: ClefType
 }
 
-/** Get note head color based on position relative to the current note. */
-function getNoteColor(index: number, currentIndex: number): string {
-  if (index < currentIndex) return '#16a34a' // past = green
-  if (index === currentIndex) return '#4f46e5' // current = indigo
-  return '#b0b0c0' // future = light gray
+interface StaffLineLayout {
+  measures: Note[][]
+  startMeasureIndex: number
+  isFirstLine: boolean
+}
+
+/**
+ * Group notes into measures based on time signature and note duration.
+ */
+function groupIntoMeasures(notes: Note[], noteDuration: NoteDuration): Note[][] {
+  const durationBeats = NOTE_DURATION_BEATS[noteDuration]
+  const notesPerMeasure = Math.round(BEATS_PER_MEASURE / durationBeats)
+  const measures: Note[][] = []
+  for (let i = 0; i < notes.length; i += notesPerMeasure) {
+    measures.push(notes.slice(i, i + notesPerMeasure))
+  }
+  return measures
+}
+
+/**
+ * Compute how measures are distributed into wrapped lines based on
+ * the available container width.
+ */
+function computeLineLayouts(
+  measures: Note[][],
+  containerWidth: number,
+  baseMeasureWidth: number,
+  keySigExtraWidth: number,
+): StaffLineLayout[] {
+  if (measures.length === 0 || containerWidth <= 0) return []
+
+  const lines: StaffLineLayout[] = []
+  let measureIndex = 0
+
+  while (measureIndex < measures.length) {
+    const isFirstLine = measureIndex === 0
+    let usedWidth = 0
+    const lineMeasures: Note[][] = []
+
+    while (measureIndex < measures.length) {
+      let measureWidth = baseMeasureWidth
+      if (lineMeasures.length === 0) {
+        if (isFirstLine) {
+          measureWidth += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
+        } else {
+          measureWidth += CLEF_EXTRA_WIDTH
+        }
+      }
+
+      if (usedWidth + measureWidth > containerWidth && lineMeasures.length > 0) {
+        break
+      }
+
+      lineMeasures.push(measures[measureIndex])
+      usedWidth += measureWidth
+      measureIndex++
+    }
+
+    lines.push({
+      measures: lineMeasures,
+      startMeasureIndex: measureIndex - lineMeasures.length,
+      isFirstLine,
+    })
+  }
+
+  return lines
 }
 
 export function ScaleStaff({
@@ -51,176 +134,188 @@ export function ScaleStaff({
   currentNoteIndex,
   chordSymbol,
   chordSymbols,
+  noteDuration = 'quarter',
+  rootPitchClass,
+  scaleTypeName,
+  restIndices,
+  clef,
 }: ScaleStaffProps) {
-  const config: StaffConfig = DEFAULT_SCALE_CONFIG
   const containerRef = useRef<HTMLDivElement>(null)
-  const filterId = useId()
-  const glowFilterId = `scale-glow-${filterId.replace(/:/g, '')}`
+  const [containerWidth, setContainerWidth] = useState(0)
 
-  // Compute key signature from the scale notes
-  const keySig = useMemo(() => getKeySignature(scaleNotes), [scaleNotes])
-  const keySigWidth = keySignatureWidth(keySig.accidentals.length)
-  const leftMargin = config.clefWidth + keySigWidth + 10
-
-  // SVG dimensions
-  const svgWidth =
-    leftMargin +
-    Math.max(0, scaleNotes.length - 1) * NOTE_SPACING +
-    RIGHT_MARGIN +
-    NOTE_SPACING
-  const svgHeight =
-    config.staffTopMargin + staffHeight(config) + STAFF_BOTTOM_MARGIN
-
-  // Compute note layouts
-  const noteLayouts = useMemo(
-    () => formatScaleNotes(scaleNotes, config, { leftMargin, noteSpacing: NOTE_SPACING }),
-    [scaleNotes, config, leftMargin],
-  )
-
-  // Whether key signature covers sharps or flats (skip per-note accidentals)
-  const useKeySig = keySig.type !== 'none'
-
-  // Auto-scroll to the current note
+  // Track container width via ResizeObserver
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const noteX = leftMargin + currentNoteIndex * NOTE_SPACING
-    const containerWidth = el.clientWidth
-    const scrollTarget = noteX - containerWidth / 2
-    el.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' })
-  }, [currentNoteIndex, leftMargin])
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width && width > 0) setContainerWidth(width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
-  const nr = config.noteRadius
-  const stemLen = config.stemLengthMultiplier * config.lineSpacing
+  // Compute key signature — prefer circle-of-fifths when root is available
+  const keySig = useMemo(() => {
+    if (rootPitchClass) {
+      const cofKeySig = getKeySignatureForScale(rootPitchClass, scaleTypeName)
+      if (cofKeySig) return cofKeySig
+    }
+    return getKeySignature(scaleNotes)
+  }, [scaleNotes, rootPitchClass, scaleTypeName])
+  const keySigExtraWidth = keySignatureWidth(keySig.accidentals.length)
+  const hideAccidentals = keySig.type !== 'none'
+
+  // Group notes into measures
+  const durationBeats = NOTE_DURATION_BEATS[noteDuration]
+  const notesPerMeasure = Math.round(BEATS_PER_MEASURE / durationBeats)
+
+  const measures = useMemo(
+    () => groupIntoMeasures(scaleNotes, noteDuration),
+    [scaleNotes, noteDuration],
+  )
+
+  // Compute per-measure chord symbol labels
+  const measureLabelsMap = useMemo(() => {
+    const labels = new Map<number, MeasureLabel[]>()
+
+    // Single chord symbol → label on the first measure
+    if (chordSymbol && !chordSymbols?.length) {
+      labels.set(0, [{ noteIndex: 0, text: chordSymbol }])
+    }
+
+    // Positioned chord symbols → map to measure/note index
+    if (chordSymbols?.length) {
+      for (const cs of chordSymbols) {
+        const measureIndex = Math.floor(cs.noteIndex / notesPerMeasure)
+        const noteIndexInMeasure = cs.noteIndex % notesPerMeasure
+        const existing = labels.get(measureIndex) ?? []
+        existing.push({ noteIndex: noteIndexInMeasure, text: cs.symbol })
+        labels.set(measureIndex, existing)
+      }
+    }
+
+    return labels
+  }, [chordSymbol, chordSymbols, notesPerMeasure])
+
+  // Compute measure widths and line layouts
+  const baseMeasureWidth = notesPerMeasure * MIN_PX_PER_NOTE + ACCIDENTAL_LEFT_MARGIN
+
+  const lineLayouts = useMemo(
+    () => computeLineLayouts(measures, containerWidth, baseMeasureWidth, keySigExtraWidth),
+    [measures, containerWidth, baseMeasureWidth, keySigExtraWidth],
+  )
+
+  // Which measure contains the current note, and the local index within it
+  const currentMeasureIndex = Math.floor(currentNoteIndex / notesPerMeasure)
+  const currentLocalIndex = currentNoteIndex % notesPerMeasure
+
+  // Auto-scroll to the line containing the current note
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    // Find which line contains the current measure
+    const lineIndex = lineLayouts.findIndex((line) => {
+      const endMeasure = line.startMeasureIndex + line.measures.length - 1
+      return currentMeasureIndex >= line.startMeasureIndex && currentMeasureIndex <= endMeasure
+    })
+    if (lineIndex < 0) return
+
+    const lineEl = el.querySelector(`[data-line-index="${lineIndex}"]`) as HTMLElement | null
+    if (!lineEl) return
+
+    // Scroll so the active line is near the top with some padding
+    const lineTop = lineEl.offsetTop - el.offsetTop
+    const targetScroll = lineTop - 20
+    el.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' })
+  }, [currentMeasureIndex, lineLayouts])
 
   return (
     <div className={styles.staffContainer} ref={containerRef}>
-      <svg
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className={styles.staffSvg}
-        style={{ minWidth: `${Math.max(svgWidth * 2, 800)}px` }}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        {/* Glow filter for the current note */}
-        <defs>
-          <filter id={glowFilterId} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
+      {lineLayouts.map((line, lineIndex) => {
+        // Compute stretch factor to fill line width
+        let lineNaturalWidth = 0
+        for (let mi = 0; mi < line.measures.length; mi++) {
+          const gmi = line.startMeasureIndex + mi
+          let w = baseMeasureWidth
+          if (gmi === 0) w += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
+          else if (mi === 0) w += CLEF_EXTRA_WIDTH
+          lineNaturalWidth += w
+        }
+        const isLastLine = lineIndex === lineLayouts.length - 1
+        const stretch = containerWidth > 0 && !isLastLine && lineNaturalWidth < containerWidth
+          ? Math.min(containerWidth / lineNaturalWidth, 1.5)
+          : 1
 
-        {/* Single chord symbol above the staff, left-aligned like a lead sheet */}
-        {chordSymbol && !chordSymbols?.length && (
-          <text
-            x={leftMargin}
-            y={config.staffTopMargin - 14}
-            textAnchor="start"
-            fill="var(--color-text-primary)"
-            fontSize="18"
-            fontWeight={600}
-            fontFamily="var(--font-family-mono, monospace)"
-          >
-            {chordSymbol}
-          </text>
-        )}
+        return (
+        <div key={lineIndex} className={styles.staffLine} data-line-index={lineIndex}>
+          {line.measures.map((measureNotes, measureInLineIndex) => {
+            const globalMeasureIndex = line.startMeasureIndex + measureInLineIndex
+            const isFirstMeasureOfFirstLine = globalMeasureIndex === 0
+            const isFirstMeasureOfLine = measureInLineIndex === 0
 
-        {/* Positioned chord symbols for combined mode */}
-        {chordSymbols?.map((cs) => (
-          <text
-            key={cs.noteIndex}
-            x={leftMargin + cs.noteIndex * NOTE_SPACING}
-            y={config.staffTopMargin - 14}
-            textAnchor="start"
-            fill="var(--color-text-primary)"
-            fontSize="18"
-            fontWeight={600}
-            fontFamily="var(--font-family-mono, monospace)"
-          >
-            {cs.symbol}
-          </text>
-        ))}
+            const showClef = isFirstMeasureOfLine
+            const showTimeSignature = isFirstMeasureOfFirstLine
 
-        {/* Staff lines, clef, and key signature via Stave */}
-        <Stave
-          config={config}
-          width={svgWidth - RIGHT_MARGIN + 10}
-          showClef
-          showKeySignature
-          keySignature={keySig}
-        >
-          {/* Individual notes with per-note coloring */}
-          {noteLayouts.map((layout) => {
-            const { note, x, y, index } = layout
-            const color = getNoteColor(index, currentNoteIndex)
-            const ledgerLines = getLedgerLines(y, config)
-            const isCurrent = index === currentNoteIndex
-            // Show per-note accidentals only if no key signature (mixed sharps/flats)
-            const accidental = useKeySig ? null : getAccidental(note.pitchClass)
-            const up = stemUp(y, config)
+            // Compute width for this measure cell, stretched to fill line
+            let cellWidth = baseMeasureWidth
+            if (isFirstMeasureOfFirstLine) {
+              cellWidth += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
+            } else if (isFirstMeasureOfLine) {
+              cellWidth += CLEF_EXTRA_WIDTH
+            }
+            cellWidth = Math.round(cellWidth * stretch)
+
+            // Determine coloring based on measure position relative to current note
+            const isMeasurePast = globalMeasureIndex < currentMeasureIndex
+            const isMeasureCurrent = globalMeasureIndex === currentMeasureIndex
+            const localActiveIndex = isMeasureCurrent ? currentLocalIndex : -1
+
+            // Past measures: all notes green, no active
+            // Current measure: future=gray, active=indigo, past=green
+            // Future measures: all notes gray, no active
+            const noteColor = isMeasurePast ? COLOR_PAST : COLOR_FUTURE
+            const activeNoteColor = isMeasureCurrent ? COLOR_CURRENT : undefined
+            const pastNoteColor = isMeasureCurrent ? COLOR_PAST : undefined
 
             return (
-              <g key={index}>
-                {/* Ledger lines */}
-                {ledgerLines.map((ly, li) => (
-                  <line
-                    key={`ledger-${index}-${li}`}
-                    x1={x - nr * 2.2}
-                    x2={x + nr * 2.2}
-                    y1={ly}
-                    y2={ly}
-                    stroke={config.colors.staffLine}
-                    strokeWidth={2}
-                  />
-                ))}
-
-                {/* Per-note accidental (only for exotic scales without key signature) */}
-                {accidental === 'sharp' && (
-                  <SharpGlyph x={x - nr - 14} y={y} color={color} config={config} />
-                )}
-                {accidental === 'flat' && (
-                  <FlatGlyph x={x - nr - 12} y={y} color={color} config={config} />
-                )}
-
-                {/* Note head (filled quarter-note style) */}
-                <ellipse
-                  cx={x}
-                  cy={y}
-                  rx={nr + 1}
-                  ry={nr - 2}
-                  fill={color}
-                  filter={isCurrent ? `url(#${glowFilterId})` : undefined}
-                  transform={`rotate(-20, ${x}, ${y})`}
+              <div
+                key={globalMeasureIndex}
+                className={styles.staffMeasure}
+                style={{ width: `${cellWidth}px` }}
+              >
+                <MeasureStaff
+                  notes={measureNotes.map((note) => ({
+                    note,
+                    duration: noteDuration,
+                  }))}
+                  showClef={showClef}
+                  showTimeSignature={showTimeSignature}
+                  showKeySignature={isFirstMeasureOfFirstLine}
+                  keySignature={keySig}
+                  beatsPerMeasure={BEATS_PER_MEASURE}
+                  beatValue={BEAT_VALUE}
+                  width={cellWidth}
+                  height={STAFF_LINE_HEIGHT}
+                  activeNoteIndex={localActiveIndex}
+                  showBarline
+                  showFinalBarline={globalMeasureIndex === measures.length - 1}
+                  labels={measureLabelsMap.get(globalMeasureIndex)}
+                  noteColor={noteColor}
+                  activeNoteColor={activeNoteColor}
+                  pastNoteColor={pastNoteColor}
+                  hideAccidentals={hideAccidentals}
+                  restIndices={restIndices}
+                  globalIndexOffset={globalMeasureIndex * notesPerMeasure}
+                  clef={clef}
                 />
-
-                {/* Stem */}
-                {up ? (
-                  <line
-                    x1={x + nr}
-                    y1={y}
-                    x2={x + nr}
-                    y2={y - stemLen}
-                    stroke={color}
-                    strokeWidth={1.5}
-                  />
-                ) : (
-                  <line
-                    x1={x - nr}
-                    y1={y}
-                    x2={x - nr}
-                    y2={y + stemLen}
-                    stroke={color}
-                    strokeWidth={1.5}
-                  />
-                )}
-
-              </g>
+              </div>
             )
           })}
-        </Stave>
-      </svg>
+        </div>
+        )
+      })}
     </div>
   )
 }

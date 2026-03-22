@@ -97,9 +97,9 @@ export function transpose(
   const pitchClass = PITCH_CLASSES_FLAT[((newIndex % 12) + 12) % 12]
   const octaveOffset = Math.floor(newIndex / 12)
   let octave = rootOctave + octaveOffset
-  // Clamp to playable range (1-4) by wrapping
+  // Clamp to playable range (1-7) — buildScaleNotes will auto-adjust to instrument range
   const MIN_OCT = 1
-  const MAX_OCT = 4
+  const MAX_OCT = 7
   const range = MAX_OCT - MIN_OCT + 1
   octave = MIN_OCT + (((octave - MIN_OCT) % range) + range) % range
   return { pitchClass, octave }
@@ -368,28 +368,6 @@ const jazzMinorIIVI: PresetTemplate = {
   },
 }
 
-const dominantWorkout: PresetTemplate = {
-  id: 'dominant-workout',
-  name: 'Dominant Workout',
-  description: 'Three dominant colors back to back: basic (Mixolydian), bebop (Half-Whole Dim.), modern (Altered).',
-  category: 'jazz',
-  transposable: true,
-  generate(rootNote, rootOctave): ScaleSequence {
-    return {
-      id: 'dominant-workout',
-      name: `Dominant Workout from ${rootNote}`,
-      description: 'Three dominant scale colors',
-      direction: 'ascending',
-      shiftSemitones: 5,
-      skipTransition: true,
-      steps: [
-        makeStep(rootNote, rootOctave, 7, SCALE.Mixolydian),
-        makeStep(rootNote, rootOctave, 7, SCALE.HalfWholeDiminished),
-        makeStep(rootNote, rootOctave, 7, SCALE.Altered),
-      ],
-    }
-  },
-}
 
 const tritonePair: PresetTemplate = {
   id: 'tritone-pair',
@@ -443,7 +421,6 @@ export const PRESETS: PresetTemplate[] = [
   jazzIIVIAltered,
   jazzMinorIIVI,
   bluesAllKeys,
-  dominantWorkout,
   tritonePair,
   chordScaleWorkout,
   circleOfFifthsMajor,

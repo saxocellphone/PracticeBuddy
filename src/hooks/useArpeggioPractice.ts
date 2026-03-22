@@ -1,17 +1,16 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { usePracticeSession } from './usePracticeSession.ts'
 import { getArpeggioStepLabel } from '@core/arpeggio/presets.ts'
-import { transpose } from '@core/endless/presets.ts'
 import { buildArpeggioNotes } from '@core/music/arpeggioBuilder.ts'
+import { expandSequenceWithLoops } from '@core/music/sequenceExpander.ts'
 import type { DetectedPitch } from '@core/wasm/types.ts'
 import type {
   ArpeggioSequence,
+  ArpeggioStep,
   ArpeggioSessionState,
   ArpeggioRunResult,
   CumulativeArpeggioStats,
 } from '@core/arpeggio/types.ts'
-
-const TRANSITION_DURATION_MS = 2000
 
 function computeCumulativeStats(results: ArpeggioRunResult[]): CumulativeArpeggioStats {
   const totalArpeggiosCompleted = results.length
@@ -48,6 +47,20 @@ const EMPTY_STATS: CumulativeArpeggioStats = {
   averageCentsOffset: 0,
 }
 
+/** Expand an arpeggio sequence, clearing labels so they regenerate for transposed roots */
+function expandArpSequence(sequence: ArpeggioSequence): ArpeggioSequence {
+  return expandSequenceWithLoops<ArpeggioSequence, ArpeggioStep>(
+    sequence,
+    (step: ArpeggioStep) => ({ root: step.root, octave: step.rootOctave }),
+    (step: ArpeggioStep, pitchClass: string, octave: number) => ({
+      ...step,
+      root: pitchClass,
+      rootOctave: octave,
+      label: undefined,
+    }),
+  )
+}
+
 export function useArpeggioPractice() {
   const {
     sessionState: innerSessionState,
@@ -61,13 +74,12 @@ export function useArpeggioPractice() {
   const [arpeggioState, setArpeggioState] = useState<ArpeggioSessionState | null>(null)
 
   const sequenceRef = useRef<ArpeggioSequence | null>(null)
-  const originalSequenceRef = useRef<ArpeggioSequence | null>(null)
   const configRef = useRef<{ centsTolerance: number; minHoldDetections: number; ignoreOctave: boolean }>({
     centsTolerance: 40,
     minHoldDetections: 3,
     ignoreOctave: true,
   })
-  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rangeRef = useRef<{ minMidi: number; maxMidi: number } | undefined>(undefined)
   const stoppedRef = useRef(false)
   const resultsRef = useRef<ArpeggioRunResult[]>([])
   const stepIndexRef = useRef(0)
@@ -80,24 +92,26 @@ export function useArpeggioPractice() {
       centsTolerance: number,
       minHoldDetections: number,
       ignoreOctave: boolean = true,
+      range?: { minMidi: number; maxMidi: number },
     ) => {
-      if (transitionTimerRef.current) {
-        clearTimeout(transitionTimerRef.current)
-        transitionTimerRef.current = null
+      // Expand sequence if it has shifts or loops — materializes all transpositions upfront
+      let activeSequence = sequence
+      if ((sequence.shiftSemitones ?? 0) > 0 || (sequence.loopCount ?? 1) > 1) {
+        activeSequence = { ...expandArpSequence(sequence), skipTransition: true }
       }
 
-      sequenceRef.current = sequence
-      originalSequenceRef.current = sequence
+      sequenceRef.current = activeSequence
       configRef.current = { centsTolerance, minHoldDetections, ignoreOctave }
+      rangeRef.current = range
       stoppedRef.current = false
       resultsRef.current = []
       stepIndexRef.current = 0
       loopsRef.current = 0
       scoreCapturedRef.current = false
 
-      const step = sequence.steps[0]
-      const numOctaves = sequence.numOctaves ?? 1
-      const { notes } = buildArpeggioNotes(step, sequence.direction, numOctaves)
+      const step = activeSequence.steps[0]
+      const numOctaves = activeSequence.numOctaves ?? 1
+      const { notes } = buildArpeggioNotes(step, activeSequence.direction, numOctaves, range)
       const label = getArpeggioStepLabel(step, ignoreOctave)
 
       startSession({
@@ -107,14 +121,14 @@ export function useArpeggioPractice() {
         ignoreOctave,
       })
 
-      const nextStep = sequence.steps.length > 1
-        ? sequence.steps[1]
-        : sequence.steps[0]
+      const nextStep = activeSequence.steps.length > 1
+        ? activeSequence.steps[1]
+        : activeSequence.steps[0]
       const nextLabel = getArpeggioStepLabel(nextStep, ignoreOctave)
 
       setArpeggioState({
         phase: 'playing',
-        sequence,
+        sequence: activeSequence,
         currentStepIndex: 0,
         currentNoteIndex: 0,
         completedLoops: 0,
@@ -130,12 +144,6 @@ export function useArpeggioPractice() {
 
   const stopArpeggio = useCallback(() => {
     stoppedRef.current = true
-
-    if (transitionTimerRef.current) {
-      clearTimeout(transitionTimerRef.current)
-      transitionTimerRef.current = null
-    }
-
     resetSession()
 
     setArpeggioState((prev) => {
@@ -144,7 +152,7 @@ export function useArpeggioPractice() {
     })
   }, [resetSession])
 
-  // Watch for inner session completion and handle transitions
+  // Watch for inner session completion and immediately start next
   useEffect(() => {
     if (
       !innerScore ||
@@ -163,7 +171,7 @@ export function useArpeggioPractice() {
     const stepIndex = stepIndexRef.current
     const step = sequence.steps[stepIndex]
     const numOctaves = sequence.numOctaves ?? 1
-    const { notes } = buildArpeggioNotes(step, sequence.direction, numOctaves)
+    const { notes } = buildArpeggioNotes(step, sequence.direction, numOctaves, rangeRef.current)
 
     const result: ArpeggioRunResult = {
       step,
@@ -179,88 +187,47 @@ export function useArpeggioPractice() {
 
     let nextStepIndex = stepIndex + 1
     let nextLoops = loopsRef.current
-    let activeSequence = sequence
     if (nextStepIndex >= sequence.steps.length) {
       nextStepIndex = 0
       nextLoops += 1
-
-      const shift = sequence.shiftSemitones ?? 0
-      if (shift !== 0 && originalSequenceRef.current) {
-        const totalShift = shift * nextLoops
-        const shiftedSteps = originalSequenceRef.current.steps.map((s) => {
-          const { pitchClass, octave } = transpose(s.root, s.rootOctave, totalShift)
-          return { ...s, root: pitchClass, rootOctave: octave, label: undefined }
-        })
-        activeSequence = { ...sequence, steps: shiftedSteps }
-        sequenceRef.current = activeSequence
-      }
     }
 
     const ioct = configRef.current.ignoreOctave
-    const nextStep = activeSequence.steps[nextStepIndex]
+    const nextStep = sequence.steps[nextStepIndex]
     const nextLabel = getArpeggioStepLabel(nextStep, ioct)
-    const { notes: nextNotes } = buildArpeggioNotes(nextStep, activeSequence.direction, activeSequence.numOctaves ?? 1)
+    const { notes: nextNotes } = buildArpeggioNotes(nextStep, sequence.direction, sequence.numOctaves ?? 1, rangeRef.current)
 
     let nextNextStepIndex = nextStepIndex + 1
-    if (nextNextStepIndex >= activeSequence.steps.length) nextNextStepIndex = 0
-    const nextNextLabel = getArpeggioStepLabel(activeSequence.steps[nextNextStepIndex], ioct)
+    if (nextNextStepIndex >= sequence.steps.length) nextNextStepIndex = 0
+    const nextNextLabel = getArpeggioStepLabel(sequence.steps[nextNextStepIndex], ioct)
 
-    const startNextArpeggio = () => {
-      if (stoppedRef.current) return
+    // Immediately start next step
+    if (stoppedRef.current) return
 
-      stepIndexRef.current = nextStepIndex
-      loopsRef.current = nextLoops
-      scoreCapturedRef.current = false
+    stepIndexRef.current = nextStepIndex
+    loopsRef.current = nextLoops
+    scoreCapturedRef.current = false
 
-      startSession({
-        scaleNotes: nextNotes,
-        centsTolerance: configRef.current.centsTolerance,
-        minHoldDetections: configRef.current.minHoldDetections,
-        ignoreOctave: configRef.current.ignoreOctave,
-      })
+    startSession({
+      scaleNotes: nextNotes,
+      centsTolerance: configRef.current.centsTolerance,
+      minHoldDetections: configRef.current.minHoldDetections,
+      ignoreOctave: configRef.current.ignoreOctave,
+    })
 
-      setArpeggioState({
-        phase: 'playing',
-        sequence: activeSequence,
-        currentStepIndex: nextStepIndex,
-        currentNoteIndex: 0,
-        completedLoops: nextLoops,
-        results: newResults,
-        currentNotes: nextNotes,
-        currentLabel: nextLabel,
-        nextLabel: nextNextLabel,
-        cumulativeStats: stats,
-      })
-    }
-
-    if (sequence.skipTransition) {
-      startNextArpeggio()
-    } else {
-      setArpeggioState({
-        phase: 'playing',
-        sequence: activeSequence,
-        currentStepIndex: nextStepIndex,
-        currentNoteIndex: 0,
-        completedLoops: nextLoops,
-        results: newResults,
-        currentNotes: nextNotes,
-        currentLabel: nextLabel,
-        nextLabel: nextNextLabel,
-        cumulativeStats: stats,
-      })
-
-      transitionTimerRef.current = setTimeout(startNextArpeggio, TRANSITION_DURATION_MS)
-    }
+    setArpeggioState({
+      phase: 'playing',
+      sequence,
+      currentStepIndex: nextStepIndex,
+      currentNoteIndex: 0,
+      completedLoops: nextLoops,
+      results: newResults,
+      currentNotes: nextNotes,
+      currentLabel: nextLabel,
+      nextLabel: nextNextLabel,
+      cumulativeStats: stats,
+    })
   }, [innerSessionState?.phase, innerScore, startSession])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (transitionTimerRef.current) {
-        clearTimeout(transitionTimerRef.current)
-      }
-    }
-  }, [])
 
   const processArpeggioFrame = useCallback(
     (pitch: DetectedPitch) => {

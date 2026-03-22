@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { scoreNote, scoreLabel } from '@core/rhythm/types.ts'
-import type { RhythmEndlessState, RhythmNoteEvent } from '@core/rhythm/types.ts'
+import type { RhythmScaleState, RhythmNoteEvent } from '@core/rhythm/types.ts'
 import styles from './RhythmResults.module.css'
 
 function getScoreColor(percent: number): string {
@@ -32,7 +32,7 @@ function getNotePoints(event: RhythmNoteEvent): number {
 }
 
 interface RhythmResultsProps {
-  rhythmState: RhythmEndlessState
+  rhythmState: RhythmScaleState
   onRetry: () => void
   onGoHome: () => void
   onBackToSetup?: () => void

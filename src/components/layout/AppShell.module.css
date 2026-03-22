@@ -55,6 +55,64 @@
   color: white;
   padding: 2px 8px;
   border-radius: var(--radius-full);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 120ms ease;
+}
+
+.badge:hover {
+  opacity: 0.88;
+}
+
+.badgeChevron {
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.badgeWrapper {
+  position: relative;
+}
+
+.badgeDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 120px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.badgeOption {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+
+.badgeOption:hover {
+  background: var(--color-surface-hover);
+}
+
+.badgeOptionActive {
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
 .titleClickable {

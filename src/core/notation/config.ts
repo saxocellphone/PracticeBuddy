@@ -5,9 +5,10 @@ import type { StaffConfig, StaffColors } from './types.ts'
  * Used for rhythm practice measure rendering with clef + time signature.
  */
 export const DEFAULT_MEASURE_CONFIG: StaffConfig = {
+  clef: 'bass',
   lineSpacing: 14,
   noteRadius: 8,
-  staffTopMargin: 55,
+  staffTopMargin: 80,
   stemLengthMultiplier: 3.5,
   beamThickness: 3.5,
   beamGap: 5,
@@ -23,12 +24,13 @@ export const DEFAULT_MEASURE_CONFIG: StaffConfig = {
 
 /**
  * Scale-view config — matches the constants in StaffNotation.tsx.
- * Used for the endless-practice scale display (no time signature).
+ * Used for the scale-practice display (no time signature).
  */
 export const DEFAULT_SCALE_CONFIG: StaffConfig = {
+  clef: 'bass',
   lineSpacing: 12,
   noteRadius: 7,
-  staffTopMargin: 50,
+  staffTopMargin: 75,
   stemLengthMultiplier: 3.5,
   beamThickness: 3.5,
   beamGap: 5,
@@ -60,7 +62,7 @@ export function staffHeight(config: StaffConfig): number {
   return 4 * config.lineSpacing
 }
 
-/** Y coordinate of the middle (3rd) staff line — the D3 line in bass clef. */
+/** Y coordinate of the middle (3rd) staff line (D3 in bass clef, B4 in treble). */
 export function middleLineY(config: StaffConfig): number {
   return config.staffTopMargin + 2 * config.lineSpacing
 }

@@ -41,43 +41,60 @@ interface RestProps {
 function getRestGlyph(
   durationBeats: number,
   config: StaffConfig,
-): { codePoint: string; y: number } {
+): { codePoint: string; y: number; dotted: boolean } {
   const midY = middleLineY(config)
   const ls = config.lineSpacing
 
+  // Check for dotted durations (1.5x of a base value)
+  // Dotted half = 3, dotted quarter = 1.5, dotted eighth = 0.75, dotted sixteenth = 0.375
   switch (durationBeats) {
     case 4:
-      // Whole rest — the glyph origin is at the middle line;
-      // it needs to sit one line higher (hangs from 2nd line)
-      return { codePoint: GLYPH_REST_WHOLE, y: midY - ls }
+      return { codePoint: GLYPH_REST_WHOLE, y: midY - ls, dotted: false }
+    case 3:
+      return { codePoint: GLYPH_REST_HALF, y: midY, dotted: true }
     case 2:
-      // Half rest — sits on the middle line
-      return { codePoint: GLYPH_REST_HALF, y: midY }
+      return { codePoint: GLYPH_REST_HALF, y: midY, dotted: false }
+    case 1.5:
+      return { codePoint: GLYPH_REST_QUARTER, y: midY, dotted: true }
     case 1:
-      return { codePoint: GLYPH_REST_QUARTER, y: midY }
+      return { codePoint: GLYPH_REST_QUARTER, y: midY, dotted: false }
+    case 0.75:
+      return { codePoint: GLYPH_REST_8TH, y: midY, dotted: true }
     case 0.5:
-      return { codePoint: GLYPH_REST_8TH, y: midY }
+      return { codePoint: GLYPH_REST_8TH, y: midY, dotted: false }
+    case 0.375:
+      return { codePoint: GLYPH_REST_16TH, y: midY, dotted: true }
     case 0.25:
-      return { codePoint: GLYPH_REST_16TH, y: midY }
+      return { codePoint: GLYPH_REST_16TH, y: midY, dotted: false }
     default:
-      return { codePoint: GLYPH_REST_QUARTER, y: midY }
+      return { codePoint: GLYPH_REST_QUARTER, y: midY, dotted: false }
   }
 }
 
 export function Rest({ x, durationBeats, color, config }: RestProps) {
-  const { codePoint, y } = getRestGlyph(durationBeats, config)
+  const { codePoint, y, dotted } = getRestGlyph(durationBeats, config)
   const fontSize = config.lineSpacing * 3.9
 
   return (
-    <text
-      x={x}
-      y={y}
-      fontFamily={NOTATION_FONT_FAMILY}
-      fontSize={fontSize}
-      fill={color}
-      textAnchor="middle"
-    >
-      {codePoint}
-    </text>
+    <g>
+      <text
+        x={x}
+        y={y}
+        fontFamily={NOTATION_FONT_FAMILY}
+        fontSize={fontSize}
+        fill={color}
+        textAnchor="middle"
+      >
+        {codePoint}
+      </text>
+      {dotted && (
+        <circle
+          cx={x + fontSize * 0.35}
+          cy={middleLineY(config) - config.lineSpacing * 0.5}
+          r={config.noteRadius * 0.3}
+          fill={color}
+        />
+      )}
+    </g>
   )
 }

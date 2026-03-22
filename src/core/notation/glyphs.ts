@@ -26,7 +26,13 @@ export const GLYPH_SHARP = '\uE262'
 export const GLYPH_FLAT = '\uE260'
 export const GLYPH_NATURAL = '\uE261'
 
+// --- Note heads ---
+export const GLYPH_NOTEHEAD_WHOLE = '\uE0A2'
+export const GLYPH_NOTEHEAD_HALF = '\uE0A3'
+export const GLYPH_NOTEHEAD_FILLED = '\uE0A4'
+
 // --- Clefs ---
+export const GLYPH_TREBLE_CLEF = '\uE050'
 export const GLYPH_BASS_CLEF = '\uE062'
 
 // --- Time signature digits (0-9) ---

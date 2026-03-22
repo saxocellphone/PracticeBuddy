@@ -17,13 +17,22 @@ export function diatonicStep(pitchClass: string): number {
 /** Absolute diatonic step for G2 — the bottom line of the bass clef. */
 export const BASS_CLEF_BOTTOM_STEP = 2 * 7 + 4 // G2 = octave 2, step G=4 → 18
 
+/** Absolute diatonic step for E4 — the bottom line of the treble clef. */
+export const TREBLE_CLEF_BOTTOM_STEP = 4 * 7 + 2 // E4 = octave 4, step E=2 → 30
+
+/** Get the bottom-line diatonic step for the given clef. */
+function clefBottomStep(config: StaffConfig): number {
+  return config.clef === 'treble' ? TREBLE_CLEF_BOTTOM_STEP : BASS_CLEF_BOTTOM_STEP
+}
+
 /**
  * Convert a Note to its vertical Y position on the staff.
  * Lower Y values = higher on the SVG canvas = higher pitch.
+ * Uses `config.clef` to determine the bottom-line reference pitch.
  */
 export function noteToStaffY(note: Note, config: StaffConfig): number {
   const step = note.octave * 7 + diatonicStep(note.pitchClass)
-  const stepsFromBottom = step - BASS_CLEF_BOTTOM_STEP
+  const stepsFromBottom = step - clefBottomStep(config)
   const halfLine = config.lineSpacing / 2
   const bottom = bottomLineY(config)
   return bottom - stepsFromBottom * halfLine

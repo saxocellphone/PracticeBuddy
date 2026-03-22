@@ -19,6 +19,15 @@ const FLAT_EQUIVALENTS: [(&str, &str); 5] = [
     ("A#", "Bb"),
 ];
 
+const FLAT_PITCH_CLASSES: [&str; 12] = [
+    "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
+];
+
+/// Natural semitone offsets for each letter name
+const LETTER_SEMITONES: [(char, i32); 7] = [
+    ('C', 0), ('D', 2), ('E', 4), ('F', 5), ('G', 7), ('A', 9), ('B', 11),
+];
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Note {
@@ -53,6 +62,64 @@ impl Note {
         }
     }
 
+    pub fn from_midi_with_spelling(midi: i32, use_flats: bool) -> Self {
+        let pitch_class_idx = ((midi % 12 + 12) % 12) as usize;
+        let octave = (midi / 12) - 1;
+        let pitch_class = if use_flats {
+            FLAT_PITCH_CLASSES[pitch_class_idx]
+        } else {
+            PITCH_CLASSES[pitch_class_idx]
+        }
+        .to_string();
+        let name = format!("{}{}", pitch_class, octave);
+        let frequency = midi_to_frequency_internal(midi);
+
+        Note {
+            name,
+            pitch_class,
+            octave,
+            midi,
+            frequency,
+        }
+    }
+
+    /// Spell a MIDI note using a specific letter name (for diatonic scale spelling).
+    /// Returns an error if the MIDI note can't be spelled with a single accidental.
+    pub fn from_midi_with_letter(midi: i32, letter: char) -> Result<Self, String> {
+        let letter = letter.to_ascii_uppercase();
+        let natural_semitone = LETTER_SEMITONES
+            .iter()
+            .find(|(l, _)| *l == letter)
+            .map(|(_, s)| *s)
+            .ok_or_else(|| format!("Invalid note letter: {}", letter))?;
+
+        let octave = ((midi as f64 - natural_semitone as f64) / 12.0).round() as i32 - 1;
+        let expected_midi = (octave + 1) * 12 + natural_semitone;
+        let diff = midi - expected_midi;
+
+        let pitch_class = match diff {
+            0 => format!("{}", letter),
+            1 => format!("{}#", letter),
+            -1 => format!("{}b", letter),
+            _ => {
+                return Err(format!(
+                    "Cannot spell MIDI {} with letter {} (needs {} semitone accidental)",
+                    midi, letter, diff
+                ))
+            }
+        };
+
+        let frequency = midi_to_frequency_internal(midi);
+
+        Ok(Note {
+            name: format!("{}{}", pitch_class, octave),
+            pitch_class,
+            octave,
+            midi,
+            frequency,
+        })
+    }
+
     pub fn from_name(name: &str) -> Result<Self, String> {
         let (pitch_class, octave_str) = parse_note_name(name)?;
         let octave: i32 = octave_str
@@ -63,12 +130,9 @@ impl Note {
         let midi = (octave + 1) * 12 + semitone as i32;
         let frequency = midi_to_frequency_internal(midi);
 
-        // Normalize pitch class to sharp representation for consistency
-        let normalized_pc = PITCH_CLASSES[semitone].to_string();
-
         Ok(Note {
-            name: format!("{}{}", normalized_pc, octave),
-            pitch_class: normalized_pc,
+            name: format!("{}{}", pitch_class, octave),
+            pitch_class,
             octave,
             midi,
             frequency,
@@ -286,9 +350,60 @@ mod tests {
     #[test]
     fn test_note_from_name_flat() {
         let note = Note::from_name("Bb3").unwrap();
-        // Normalized to sharp
-        assert_eq!(note.pitch_class, "A#");
+        assert_eq!(note.pitch_class, "Bb");
+        assert_eq!(note.name, "Bb3");
         assert_eq!(note.midi, 58);
+    }
+
+    #[test]
+    fn test_from_midi_with_spelling_flats() {
+        let note = Note::from_midi_with_spelling(58, true);
+        assert_eq!(note.pitch_class, "Bb");
+        assert_eq!(note.name, "Bb3");
+        assert_eq!(note.midi, 58);
+    }
+
+    #[test]
+    fn test_from_midi_with_spelling_sharps() {
+        let note = Note::from_midi_with_spelling(58, false);
+        assert_eq!(note.pitch_class, "A#");
+        assert_eq!(note.name, "A#3");
+    }
+
+    #[test]
+    fn test_from_midi_with_letter_natural() {
+        let note = Note::from_midi_with_letter(60, 'C').unwrap();
+        assert_eq!(note.pitch_class, "C");
+        assert_eq!(note.name, "C4");
+    }
+
+    #[test]
+    fn test_from_midi_with_letter_sharp() {
+        // MIDI 66 = F#4, spelled with letter G = Gb4
+        let note = Note::from_midi_with_letter(66, 'G').unwrap();
+        assert_eq!(note.pitch_class, "Gb");
+        assert_eq!(note.name, "Gb4");
+        assert_eq!(note.midi, 66);
+    }
+
+    #[test]
+    fn test_from_midi_with_letter_flat_boundary() {
+        // MIDI 47 = B2 normally, but spelled with letter C = Cb3
+        let note = Note::from_midi_with_letter(47, 'C').unwrap();
+        assert_eq!(note.pitch_class, "Cb");
+        assert_eq!(note.name, "Cb3");
+        assert_eq!(note.octave, 3);
+        assert_eq!(note.midi, 47);
+    }
+
+    #[test]
+    fn test_from_midi_with_letter_sharp_boundary() {
+        // MIDI 53 = F3 normally, but spelled with letter E = E#3
+        let note = Note::from_midi_with_letter(53, 'E').unwrap();
+        assert_eq!(note.pitch_class, "E#");
+        assert_eq!(note.name, "E#3");
+        assert_eq!(note.octave, 3);
+        assert_eq!(note.midi, 53);
     }
 
     #[test]

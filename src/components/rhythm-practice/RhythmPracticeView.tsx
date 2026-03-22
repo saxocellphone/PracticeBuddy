@@ -1,15 +1,18 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import type { DetectedPitch, FrequencyToNoteResult } from '@core/wasm/types.ts'
+import type { ClefType } from '@core/instruments.ts'
 import {
   NOTE_DURATION_BEATS,
 } from '@core/rhythm/types.ts'
 import type {
   RhythmSessionState,
-  RhythmEndlessState,
+  RhythmScaleState,
   RhythmNoteEvent,
 } from '@core/rhythm/types.ts'
 import { COUNTDOWN_BEATS } from '@hooks/useRhythmPractice.ts'
+import { getStepChordSymbol } from '@core/endless/presets.ts'
 import { MeasureStaff } from '@core/notation'
+import type { MeasureLabel } from '@core/notation'
 import { HitMissFeedback } from './HitMissFeedback.tsx'
 import styles from './RhythmPracticeView.module.css'
 
@@ -17,7 +20,7 @@ import styles from './RhythmPracticeView.module.css'
 const QUARTER_NOTE_WIDTH_PX = 160
 
 /** Height of the staff notation rendering within each cell */
-const STAFF_HEIGHT_PX = 180
+const STAFF_HEIGHT_PX = 220
 
 /** Default time signature: 4/4 */
 const BEATS_PER_MEASURE = 4
@@ -29,10 +32,14 @@ const CLEF_TIME_SIG_WIDTH_PX = 88
 
 interface RhythmPracticeViewProps {
   sessionState: RhythmSessionState
-  rhythmState: RhythmEndlessState
+  rhythmState: RhythmScaleState
   detectedPitch: DetectedPitch | null
   noteResult: FrequencyToNoteResult | null
   onStop: () => void
+  /** AudioContext for reading currentTime directly in the scroll RAF */
+  audioContext?: AudioContext | null
+  /** Clef type for notation rendering */
+  clef?: ClefType
 }
 
 export function RhythmPracticeView({
@@ -41,6 +48,8 @@ export function RhythmPracticeView({
   detectedPitch,
   noteResult,
   onStop,
+  audioContext,
+  clef,
 }: RhythmPracticeViewProps) {
   const railTrackRef = useRef<HTMLDivElement>(null)
   const railContainerRef = useRef<HTMLDivElement>(null)
@@ -50,14 +59,43 @@ export function RhythmPracticeView({
   const noteDurationBeats = NOTE_DURATION_BEATS[sessionState.noteDuration]
   const notesPerMeasure = Math.round(BEATS_PER_MEASURE / noteDurationBeats)
 
-  // Group noteEvents into measure-sized cells
-  const measureGroups: RhythmNoteEvent[][] = []
-  for (let i = 0; i < sessionState.noteEvents.length; i += notesPerMeasure) {
-    measureGroups.push(sessionState.noteEvents.slice(i, i + notesPerMeasure))
-  }
+  // Group noteEvents into measure-sized cells (memoized to avoid re-slicing on every frame)
+  const measureGroups = useMemo(() => {
+    const groups: RhythmNoteEvent[][] = []
+    for (let i = 0; i < sessionState.noteEvents.length; i += notesPerMeasure) {
+      groups.push(sessionState.noteEvents.slice(i, i + notesPerMeasure))
+    }
+    return groups
+  }, [sessionState.noteEvents, notesPerMeasure])
 
-  // Each measure cell spans BEATS_PER_MEASURE beats
-  const cellWidthPx = QUARTER_NOTE_WIDTH_PX * BEATS_PER_MEASURE
+  // Pre-compute stable notes arrays for MeasureStaff (avoids creating new arrays every frame)
+  const measureNoteArrays = useMemo(() => {
+    return measureGroups.map(group =>
+      group.map(e => ({ note: e.expectedNote, duration: sessionState.noteDuration }))
+    )
+  }, [measureGroups, sessionState.noteDuration])
+
+  // Compute chord symbol labels for each measure from step boundaries
+  const measureLabelsMap = useMemo(() => {
+    const labels = new Map<number, MeasureLabel[]>()
+    for (const boundary of rhythmState.stepBoundaries) {
+      const chordText = getStepChordSymbol(boundary.step)
+      if (chordText) {
+        const measureIndex = Math.floor(boundary.startNoteIndex / notesPerMeasure)
+        const noteIndexInMeasure = boundary.startNoteIndex % notesPerMeasure
+        const existing = labels.get(measureIndex) ?? []
+        existing.push({ noteIndex: noteIndexInMeasure, text: chordText })
+        labels.set(measureIndex, existing)
+      }
+    }
+    return labels
+  }, [rhythmState.stepBoundaries, notesPerMeasure])
+
+  // Each measure cell spans BEATS_PER_MEASURE beats.
+  // Add ACCIDENTAL_LEFT_MARGIN (12px) so MeasureStaff's internal startX
+  // doesn't compress the note spacing below QUARTER_NOTE_WIDTH_PX per beat.
+  const ACCIDENTAL_MARGIN = 12
+  const cellWidthPx = QUARTER_NOTE_WIDTH_PX * BEATS_PER_MEASURE + ACCIDENTAL_MARGIN
 
   // Notes are centered within their slot (index + 0.5), so the first note
   // is offset by half a note-spacing from the cell edge. Account for this
@@ -72,33 +110,35 @@ export function RhythmPracticeView({
   // Total offset: clef/time-sig in first cell + half-note centering
   const scrollOffsetPx = CLEF_TIME_SIG_WIDTH_PX + halfNoteSpacingPx
 
-  const updateRailPosition = useCallback(() => {
-    if (!railTrackRef.current || !railContainerRef.current) return
-
-    const containerWidth = railContainerRef.current.offsetWidth
-    const playheadX = containerWidth * playheadOffsetPercent
-
-    if (sessionState.phase !== 'playing') {
-      railTrackRef.current.style.transform = `translateX(${playheadX - scrollOffsetPx}px)`
-      return
-    }
-
-    const elapsed = sessionState.currentTime - sessionState.startTime
-    const scrollX = elapsed * pixelsPerSecond
-
-    railTrackRef.current.style.transform = `translateX(${playheadX - scrollX - scrollOffsetPx}px)`
-  }, [
-    sessionState.phase,
-    sessionState.currentTime,
-    sessionState.startTime,
-    pixelsPerSecond,
-    playheadOffsetPercent,
-    scrollOffsetPx,
-  ])
+  // Scroll position: RAF loop reads AudioContext.currentTime directly for
+  // jitter-free, drift-free scrolling without triggering React re-renders.
+  const scrollRafRef = useRef(0)
+  const startTimeStable = useRef(sessionState.startTime)
+  const phaseStable = useRef(sessionState.phase)
+  startTimeStable.current = sessionState.startTime
+  phaseStable.current = sessionState.phase
 
   useEffect(() => {
-    updateRailPosition()
-  }, [updateRailPosition])
+    const tick = () => {
+      if (railTrackRef.current && railContainerRef.current) {
+        const containerWidth = railContainerRef.current.offsetWidth
+        const playheadX = containerWidth * playheadOffsetPercent
+
+        if (phaseStable.current !== 'playing') {
+          railTrackRef.current.style.transform = `translateX(${playheadX - scrollOffsetPx}px)`
+        } else {
+          // Read AudioContext time directly — most accurate source, no intermediary
+          const now = audioContext?.currentTime ?? 0
+          const elapsed = Math.max(0, now - startTimeStable.current)
+          const scrollX = elapsed * pixelsPerSecond
+          railTrackRef.current.style.transform = `translateX(${playheadX - scrollX - scrollOffsetPx}px)`
+        }
+      }
+      scrollRafRef.current = requestAnimationFrame(tick)
+    }
+    scrollRafRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(scrollRafRef.current)
+  }, [pixelsPerSecond, playheadOffsetPercent, scrollOffsetPx, audioContext])
 
   // Beat pulse effect on playhead — driven by metronome onBeat subscription
   // via sessionState.currentBeat, so it stays in lockstep with the audio click.
@@ -206,17 +246,26 @@ export function RhythmPracticeView({
           </div>
         )}
 
-        {/* Scrolling track */}
+        {/* Scrolling track — virtualized: only render measures near the playhead */}
         <div className={styles.railTrack} ref={railTrackRef}>
           {measureGroups.map((group, i) => {
             const firstIdx = group[0].noteIndex
             const lastIdx = group[group.length - 1].noteIndex
+            const currentMeasure = Math.floor(sessionState.currentNoteIndex / notesPerMeasure)
+
+            // Virtualization: only render measures within ±4 of the current measure
+            const RENDER_WINDOW = 4
+            if (i < currentMeasure - RENDER_WINDOW || i > currentMeasure + RENDER_WINDOW) {
+              const thisCellWidth = i === 0 ? cellWidthPx + CLEF_TIME_SIG_WIDTH_PX - ACCIDENTAL_MARGIN : cellWidthPx
+              return <div key={firstIdx} style={{ width: `${thisCellWidth}px`, height: `${STAFF_HEIGHT_PX}px`, flexShrink: 0 }} />
+            }
+
             const isPast = lastIdx < sessionState.currentNoteIndex
             const isActive =
               sessionState.currentNoteIndex >= firstIdx &&
               sessionState.currentNoteIndex <= lastIdx
 
-            const thisCellWidth = i === 0 ? cellWidthPx + CLEF_TIME_SIG_WIDTH_PX : cellWidthPx
+            const thisCellWidth = i === 0 ? cellWidthPx + CLEF_TIME_SIG_WIDTH_PX - ACCIDENTAL_MARGIN : cellWidthPx
 
             return (
               <div
@@ -226,10 +275,7 @@ export function RhythmPracticeView({
               >
                 {/* Staff notation — notes grouped per measure */}
                 <MeasureStaff
-                  notes={group.map((e) => ({
-                    note: e.expectedNote,
-                    duration: sessionState.noteDuration,
-                  }))}
+                  notes={measureNoteArrays[i]}
                   showClef={i === 0}
                   showTimeSignature={i === 0}
                   beatsPerMeasure={BEATS_PER_MEASURE}
@@ -238,6 +284,11 @@ export function RhythmPracticeView({
                   height={STAFF_HEIGHT_PX}
                   dimmed={isPast}
                   activeNoteIndex={isActive ? sessionState.currentNoteIndex - firstIdx : -1}
+                  restIndices={sessionState.restIndices}
+                  globalIndexOffset={firstIdx}
+                  labels={measureLabelsMap.get(i)}
+                  showFinalBarline={i === measureGroups.length - 1}
+                  clef={clef}
                 />
               </div>
             )

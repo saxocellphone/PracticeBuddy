@@ -1,5 +1,6 @@
 import type { Note } from '@core/wasm/types.ts'
 import type { NoteDuration } from '@core/rhythm/types.ts'
+import type { ClefType } from '@core/instruments.ts'
 
 export interface StaffColors {
   note: string
@@ -9,6 +10,7 @@ export interface StaffColors {
 }
 
 export interface StaffConfig {
+  clef: ClefType
   lineSpacing: number
   staffTopMargin: number
   noteRadius: number

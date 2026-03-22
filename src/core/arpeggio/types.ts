@@ -74,6 +74,10 @@ export interface ArpeggioSequence {
   shiftSemitones?: number
   /** When true, skip the transition screen between arpeggios. */
   skipTransition?: boolean
+  /** How many times to repeat the sequence when shiftSemitones is 0. Defaults to 1. */
+  loopCount?: number
+  /** Pitch class to stop shifting at (e.g., "Eb"). Computes transpositions from first step's root to this key. */
+  shiftUntilKey?: string
 }
 
 // ---- Session results ----

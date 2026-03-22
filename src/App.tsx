@@ -1,36 +1,57 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { loadNotationFont } from '@core/notation/font.ts'
 import { useWasm } from '@hooks/useWasm.ts'
 import { useAudioEngine } from '@hooks/useAudioEngine.ts'
 import { usePitchDetection } from '@hooks/usePitchDetection.ts'
 import { useMetronome } from '@hooks/useMetronome.ts'
 import { useScaleSelection } from '@hooks/useScaleSelection.ts'
-import { useEndlessPractice } from '@hooks/useEndlessPractice.ts'
+import { useScalePractice } from '@hooks/useScalePractice.ts'
 import { useRhythmPractice } from '@hooks/useRhythmPractice.ts'
 import { useArpeggioPractice } from '@hooks/useArpeggioPractice.ts'
+import { getInstrument, INSTRUMENTS } from '@core/instruments.ts'
 import { AppShell } from '@components/layout/AppShell.tsx'
 import { MetronomeControls } from '@components/metronome/MetronomeControls.tsx'
 import { PracticeView } from '@components/practice-view/PracticeView.tsx'
-import { EndlessResults } from '@components/session-results/EndlessResults.tsx'
+import { ScaleResults } from '@components/session-results/ScaleResults.tsx'
 import { RhythmPracticeView } from '@components/rhythm-practice/RhythmPracticeView.tsx'
 import { RhythmResults } from '@components/rhythm-results/RhythmResults.tsx'
 import { PitchLeniency } from '@components/common/PitchLeniency.tsx'
 import { AdvancedSettings } from '@components/common/AdvancedSettings.tsx'
-import { NoteDurationPicker } from '@components/common/NoteDurationPicker.tsx'
+import { MicSelector } from '@components/common/MicSelector.tsx'
 import { HomePage } from '@components/home/HomePage.tsx'
 import type { PracticeMode, TimingMode } from '@components/home/HomePage.tsx'
-import { EndlessSetup } from '@components/endless-setup/EndlessSetup.tsx'
-import { EndlessBanner } from '@components/practice-view/EndlessBanner.tsx'
+import { ScaleSetup } from '@components/scale-setup/ScaleSetup.tsx'
+import { ScaleBanner } from '@components/practice-view/ScaleBanner.tsx'
 import { ArpeggioSetup } from '@components/arpeggio-setup/ArpeggioSetup.tsx'
 import { ArpeggioPracticeView } from '@components/arpeggio-practice/ArpeggioPracticeView.tsx'
 import { ArpeggioResults } from '@components/arpeggio-results/ArpeggioResults.tsx'
-import type { ScaleSequence } from '@core/endless/types.ts'
-import type { ArpeggioSequence } from '@core/arpeggio/types.ts'
-import { buildAllArpeggioStepsNotes, arpeggioToScaleSequence, expandArpeggioSequence } from '@core/arpeggio/sequence.ts'
+import type { ScaleSequence, ScaleStep } from '@core/endless/types.ts'
+import type { ArpeggioSequence, ArpeggioStep } from '@core/arpeggio/types.ts'
+import { buildAllArpeggioStepsNotes, arpeggioToScaleSequence } from '@core/arpeggio/sequence.ts'
+import { expandSequenceWithLoops } from '@core/music/sequenceExpander.ts'
 import {
   RHYTHM_DURATION_STORAGE_KEY,
 } from '@core/rhythm/types.ts'
-import type { NoteDuration } from '@core/rhythm/types.ts'
+import { SCALE_START_LABELS } from '@core/rhythm/types.ts'
+import type { NoteDuration, ScaleStartPosition } from '@core/rhythm/types.ts'
+
+function expandScaleSeq(seq: ScaleSequence): ScaleSequence {
+  const expanded = expandSequenceWithLoops<ScaleSequence, ScaleStep>(
+    seq,
+    (step) => ({ root: step.rootNote, octave: step.rootOctave }),
+    (step, pitchClass, octave) => ({ ...step, rootNote: pitchClass, rootOctave: octave, label: undefined, chordSymbol: undefined }),
+  )
+  return expanded.steps.length > 1 ? { ...expanded, skipTransition: true } : expanded
+}
+
+function expandArpSeq(seq: ArpeggioSequence): ArpeggioSequence {
+  const expanded = expandSequenceWithLoops<ArpeggioSequence, ArpeggioStep>(
+    seq,
+    (step) => ({ root: step.root, octave: step.rootOctave }),
+    (step, pitchClass, octave) => ({ ...step, root: pitchClass, rootOctave: octave, label: undefined }),
+  )
+  return expanded.steps.length > 1 ? { ...expanded, skipTransition: true } : expanded
+}
 
 type AppView = 'home' | 'setup' | 'practicing' | 'results'
 
@@ -66,7 +87,12 @@ interface PersistedSettings {
   centsTolerance: number
   ignoreOctave: boolean
   timingMode: TimingMode
+  activeMode: PracticeMode
   micSensitivity: number
+  selectedDeviceId: string | null
+  metronomeEnabled: boolean
+  scaleStartPosition: ScaleStartPosition
+  instrumentId: string
 }
 
 const DEFAULT_SETTINGS: PersistedSettings = {
@@ -74,7 +100,12 @@ const DEFAULT_SETTINGS: PersistedSettings = {
   centsTolerance: 40,
   ignoreOctave: true,
   timingMode: 'follow',
+  activeMode: 'scales',
   micSensitivity: 50,
+  selectedDeviceId: null,
+  metronomeEnabled: true,
+  scaleStartPosition: 'strong-beat',
+  instrumentId: 'bass',
 }
 
 /**
@@ -99,7 +130,12 @@ function loadSettings(): PersistedSettings {
       centsTolerance: typeof parsed.centsTolerance === 'number' && parsed.centsTolerance >= 10 && parsed.centsTolerance <= 100 ? parsed.centsTolerance : DEFAULT_SETTINGS.centsTolerance,
       ignoreOctave: typeof parsed.ignoreOctave === 'boolean' ? parsed.ignoreOctave : DEFAULT_SETTINGS.ignoreOctave,
       timingMode: parsed.timingMode === 'follow' || parsed.timingMode === 'rhythm' ? parsed.timingMode : DEFAULT_SETTINGS.timingMode,
+      activeMode: parsed.activeMode === 'scales' || parsed.activeMode === 'arpeggios' ? parsed.activeMode : DEFAULT_SETTINGS.activeMode,
       micSensitivity: typeof parsed.micSensitivity === 'number' && parsed.micSensitivity >= 0 && parsed.micSensitivity <= 100 ? parsed.micSensitivity : DEFAULT_SETTINGS.micSensitivity,
+      selectedDeviceId: typeof parsed.selectedDeviceId === 'string' ? parsed.selectedDeviceId : DEFAULT_SETTINGS.selectedDeviceId,
+      metronomeEnabled: typeof parsed.metronomeEnabled === 'boolean' ? parsed.metronomeEnabled : DEFAULT_SETTINGS.metronomeEnabled,
+      scaleStartPosition: ['strong-beat', 'next-measure', 'immediately'].includes(parsed.scaleStartPosition) ? parsed.scaleStartPosition : DEFAULT_SETTINGS.scaleStartPosition,
+      instrumentId: typeof parsed.instrumentId === 'string' ? parsed.instrumentId : DEFAULT_SETTINGS.instrumentId,
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -119,8 +155,14 @@ function loadNoteDuration(): NoteDuration {
 function MainApp() {
   // Load persisted settings once on mount (lazy initializer runs only on first render)
   const [saved] = useState(loadSettings)
-  const [view, setView] = useState<AppView>('home')
-  const [activeMode, setActiveMode] = useState<PracticeMode>('scales')
+  const [view, setView] = useState<AppView>(() => {
+    try {
+      const v = localStorage.getItem('practicebuddy:view')
+      if (v === 'setup') return 'setup'
+    } catch { /* ignore */ }
+    return 'home'
+  })
+  const [activeMode, setActiveMode] = useState<PracticeMode>(saved.activeMode)
   const [centsTolerance, setCentsTolerance] = useState(saved.centsTolerance)
   const [ignoreOctave, setIgnoreOctave] = useState(saved.ignoreOctave)
   const [micSensitivity, setMicSensitivity] = useState(saved.micSensitivity)
@@ -128,11 +170,24 @@ function MainApp() {
   // Rhythm mode state
   const [noteDuration, setNoteDuration] = useState<NoteDuration>(loadNoteDuration)
 
+  // Metronome enabled toggle (follow mode only — rhythm mode always uses metronome)
+  const [metronomeEnabled, setMetronomeEnabled] = useState(saved.metronomeEnabled)
+  const [scaleStartPosition, setScaleStartPosition] = useState<ScaleStartPosition>(saved.scaleStartPosition)
+  const [instrumentId, setInstrumentId] = useState(saved.instrumentId)
+  const instrument = getInstrument(instrumentId)
+
   // Timing mode: follow (self-paced) or rhythm (beat-synced) — applies to all content types
   const [timingMode, setTimingMode] = useState<TimingMode>(saved.timingMode)
 
   // Audio engine
   const audio = useAudioEngine()
+
+  // Persist view (only home/setup — practicing/results don't survive refresh)
+  useEffect(() => {
+    if (view === 'home' || view === 'setup') {
+      localStorage.setItem('practicebuddy:view', view)
+    }
+  }, [view])
 
   // Scale selection (for available scales list)
   const scale = useScaleSelection()
@@ -158,28 +213,25 @@ function MainApp() {
       centsTolerance,
       ignoreOctave,
       timingMode,
+      activeMode,
       micSensitivity,
+      selectedDeviceId: audio.currentDeviceId,
+      metronomeEnabled,
+      scaleStartPosition,
+      instrumentId,
     }))
-  }, [metronome.bpm, centsTolerance, ignoreOctave, timingMode, micSensitivity])
+  }, [metronome.bpm, centsTolerance, ignoreOctave, timingMode, activeMode, micSensitivity, audio.currentDeviceId, metronomeEnabled, scaleStartPosition, instrumentId])
 
   // Persist rhythm settings
   useEffect(() => {
     localStorage.setItem(RHYTHM_DURATION_STORAGE_KEY, noteDuration)
   }, [noteDuration])
 
-  // Scale practice (endless mode)
+  // Scale practice
   const {
-    endlessState, innerSessionState, startEndless, stopEndless,
-    processFrame: endlessProcessFrame, skipNote,
-  } = useEndlessPractice()
-
-  // Derive the last completed score for transition display (no state needed)
-  const lastCompletedScore = useMemo(() => {
-    if (endlessState?.phase === 'transitioning' && endlessState.results.length > 0) {
-      return endlessState.results[endlessState.results.length - 1].score
-    }
-    return null
-  }, [endlessState?.phase, endlessState?.results])
+    scaleState, innerSessionState, startScalePractice, stopScalePractice,
+    processFrame: scaleProcessFrame, skipNote,
+  } = useScalePractice()
 
   // Rhythm practice mode
   const {
@@ -198,9 +250,9 @@ function MainApp() {
     if (view !== 'practicing' || !pitchResult.pitch) return
     if (activeMode !== 'scales' || timingMode !== 'follow') return
     if (innerSessionState?.phase === 'Playing') {
-      endlessProcessFrame(pitchResult.pitch)
+      scaleProcessFrame(pitchResult.pitch)
     }
-  }, [view, pitchResult.pitch, innerSessionState?.phase, endlessProcessFrame, activeMode, timingMode])
+  }, [view, pitchResult.pitch, innerSessionState?.phase, scaleProcessFrame, activeMode, timingMode])
 
   // Feed pitch detection into arpeggios (follow mode)
   useEffect(() => {
@@ -221,18 +273,18 @@ function MainApp() {
 
   // Destructure stable functions from hooks so dependency arrays are precise
   const { stop: metronomeStop, start: metronomeStart, isPlaying: metronomeIsPlaying, bpm } = metronome
-  const { state: audioState, initialize: audioInitialize, audioContext: audioCtx } = audio
+  const { state: audioState, initialize: audioInitialize, audioContext: audioCtx, devices: audioDevices, switchDevice: audioSwitchDevice, currentDeviceId } = audio
 
   // Auto-transition to results when stopped (scales follow mode)
   // Guard on view === 'practicing' so manual navigation (back to setup) isn't overridden.
   useEffect(() => {
     if (view !== 'practicing') return
     if (activeMode !== 'scales' || timingMode !== 'follow') return
-    if (endlessState?.phase === 'stopped') {
+    if (scaleState?.phase === 'stopped') {
       metronomeStop()
       queueMicrotask(() => setView('results'))
     }
-  }, [view, endlessState?.phase, metronomeStop, activeMode, timingMode])
+  }, [view, scaleState?.phase, metronomeStop, activeMode, timingMode])
 
   // Auto-transition to results when stopped (arpeggios follow mode)
   useEffect(() => {
@@ -257,20 +309,20 @@ function MainApp() {
   // ---- Navigation ----
 
   const handleGoHome = useCallback(() => {
-    stopEndless()
+    stopScalePractice()
     stopRhythm()
     stopArpeggio()
     metronomeStop()
     setView('home')
-  }, [stopEndless, stopRhythm, stopArpeggio, metronomeStop])
+  }, [stopScalePractice, stopRhythm, stopArpeggio, metronomeStop])
 
   const handleBackToSetup = useCallback(() => {
-    stopEndless()
+    stopScalePractice()
     stopRhythm()
     stopArpeggio()
     metronomeStop()
     setView('setup')
-  }, [stopEndless, stopRhythm, stopArpeggio, metronomeStop])
+  }, [stopScalePractice, stopRhythm, stopArpeggio, metronomeStop])
 
   const handleSelectMode = useCallback((mode: PracticeMode, timing: TimingMode) => {
     setActiveMode(mode)
@@ -280,20 +332,22 @@ function MainApp() {
 
   // ---- Scale Practice Handlers ----
 
-  const endlessSequenceRef = useRef<ScaleSequence | null>(null)
+  const scaleSequenceRef = useRef<ScaleSequence | null>(null)
   const arpeggioSequenceRef = useRef<ArpeggioSequence | null>(null)
 
   const handleStartPractice = useCallback(async (sequence: ScaleSequence) => {
     if (audioState === 'uninitialized') {
-      await audioInitialize()
+      await audioInitialize(saved.selectedDeviceId ?? undefined)
     }
 
-    endlessSequenceRef.current = sequence
-    startEndless(sequence, centsTolerance, 3, ignoreOctave)
-    metronomeStart()
+    const expanded = expandScaleSeq(sequence)
+    scaleSequenceRef.current = expanded
+    const range = { minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }
+    startScalePractice(expanded, centsTolerance, 3, ignoreOctave, noteDuration, scaleStartPosition, range)
+    if (metronomeEnabled) metronomeStart()
 
     setView('practicing')
-  }, [audioState, audioInitialize, startEndless, centsTolerance, ignoreOctave, metronomeStart])
+  }, [audioState, audioInitialize, startScalePractice, centsTolerance, ignoreOctave, metronomeEnabled, metronomeStart, instrument])
 
   const handleStopPractice = useCallback(() => {
     if (timingMode === 'rhythm') {
@@ -301,27 +355,27 @@ function MainApp() {
     } else if (activeMode === 'arpeggios') {
       stopArpeggio()
     } else {
-      stopEndless()
+      stopScalePractice()
     }
     metronomeStop()
-  }, [activeMode, timingMode, stopEndless, stopRhythm, stopArpeggio, metronomeStop])
+  }, [activeMode, timingMode, stopScalePractice, stopRhythm, stopArpeggio, metronomeStop])
 
   const handleRetry = useCallback(() => {
+    const range = { minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }
     if (timingMode === 'rhythm') {
       // Rhythm retry — works for both scales and arpeggios
       if (activeMode === 'arpeggios') {
         if (!arpeggioSequenceRef.current) return
-        const expanded = expandArpeggioSequence(arpeggioSequenceRef.current)
-        const prebuiltNotes = buildAllArpeggioStepsNotes(expanded, ignoreOctave)
-        const adaptedSequence = arpeggioToScaleSequence(expanded, ignoreOctave)
-        endlessSequenceRef.current = adaptedSequence
+        const prebuiltNotes = buildAllArpeggioStepsNotes(arpeggioSequenceRef.current, ignoreOctave)
+        const adaptedSequence = arpeggioToScaleSequence(arpeggioSequenceRef.current, ignoreOctave)
+        scaleSequenceRef.current = adaptedSequence
         metronomeStop()
-        startRhythm(adaptedSequence, bpm, noteDuration, centsTolerance, ignoreOctave, audioCtx ?? undefined, prebuiltNotes)
+        startRhythm(adaptedSequence, bpm, noteDuration, centsTolerance, ignoreOctave, audioCtx ?? undefined, prebuiltNotes, range)
         metronomeStart()
       } else {
-        if (!endlessSequenceRef.current) return
+        if (!scaleSequenceRef.current) return
         metronomeStop()
-        startRhythm(endlessSequenceRef.current, bpm, noteDuration, centsTolerance, ignoreOctave, audioCtx ?? undefined)
+        startRhythm(scaleSequenceRef.current, bpm, noteDuration, centsTolerance, ignoreOctave, audioCtx ?? undefined, undefined, range)
         metronomeStart()
       }
       setView('practicing')
@@ -329,19 +383,20 @@ function MainApp() {
     }
 
     // Follow retry
+    metronomeStop()
     if (activeMode === 'arpeggios') {
       if (!arpeggioSequenceRef.current) return
-      startArpeggio(arpeggioSequenceRef.current, centsTolerance, 3, ignoreOctave)
-      metronomeStart()
+      startArpeggio(arpeggioSequenceRef.current, centsTolerance, 3, ignoreOctave, range)
+      if (metronomeEnabled) metronomeStart()
       setView('practicing')
       return
     }
 
-    if (!endlessSequenceRef.current) return
-    startEndless(endlessSequenceRef.current, centsTolerance, 3, ignoreOctave)
-    metronomeStart()
+    if (!scaleSequenceRef.current) return
+    startScalePractice(scaleSequenceRef.current, centsTolerance, 3, ignoreOctave, noteDuration, scaleStartPosition, range)
+    if (metronomeEnabled) metronomeStart()
     setView('practicing')
-  }, [activeMode, timingMode, startEndless, startRhythm, startArpeggio, centsTolerance, ignoreOctave, metronomeStart, metronomeStop, bpm, noteDuration, audioCtx])
+  }, [activeMode, timingMode, startScalePractice, startRhythm, startArpeggio, centsTolerance, ignoreOctave, metronomeEnabled, metronomeStart, metronomeStop, bpm, noteDuration, audioCtx, instrument])
 
   // Rhythm-specific start handler
   const handleStartRhythmPractice = useCallback(async (sequence: ScaleSequence) => {
@@ -351,58 +406,66 @@ function MainApp() {
     // committed to a render yet at this point in the async callback.
     let ctx = audioCtx
     if (audioState === 'uninitialized') {
-      ctx = await audioInitialize()
+      ctx = await audioInitialize(saved.selectedDeviceId ?? undefined)
     }
 
     if (!ctx) return
 
-    endlessSequenceRef.current = sequence
+    const expanded = expandScaleSeq(sequence)
+    scaleSequenceRef.current = expanded
+    const range = { minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }
     metronomeStop()
     startRhythm(
-      sequence,
+      expanded,
       bpm,
       noteDuration,
       centsTolerance,
       ignoreOctave,
       ctx,
+      undefined,
+      range,
     )
     metronomeStart()
     setView('practicing')
-  }, [audioCtx, audioState, audioInitialize, startRhythm, bpm, metronomeStop, metronomeStart, noteDuration, centsTolerance, ignoreOctave])
+  }, [audioCtx, audioState, audioInitialize, startRhythm, bpm, metronomeStop, metronomeStart, noteDuration, centsTolerance, ignoreOctave, instrument])
 
   // Arpeggio-specific start handler
   const handleStartArpeggioPractice = useCallback(async (sequence: ArpeggioSequence) => {
     let ctx = audioCtx
     if (audioState === 'uninitialized') {
-      ctx = await audioInitialize()
+      ctx = await audioInitialize(saved.selectedDeviceId ?? undefined)
     }
 
-    arpeggioSequenceRef.current = sequence
+    const expandedArp = expandArpSeq(sequence)
+    arpeggioSequenceRef.current = expandedArp
 
+    const range = { minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }
     if (timingMode === 'rhythm') {
       if (!ctx) return
-      // Expand single-step sequences to include all transpositions
-      const expanded = expandArpeggioSequence(sequence)
-      const prebuiltNotes = buildAllArpeggioStepsNotes(expanded, ignoreOctave)
-      const adaptedSequence = arpeggioToScaleSequence(expanded, ignoreOctave)
-      endlessSequenceRef.current = adaptedSequence
+      const prebuiltNotes = buildAllArpeggioStepsNotes(expandedArp, ignoreOctave)
+      const adaptedSequence = arpeggioToScaleSequence(expandedArp, ignoreOctave)
+      scaleSequenceRef.current = adaptedSequence
       metronomeStop()
-      startRhythm(adaptedSequence, bpm, noteDuration, centsTolerance, ignoreOctave, ctx, prebuiltNotes)
+      startRhythm(adaptedSequence, bpm, noteDuration, centsTolerance, ignoreOctave, ctx, prebuiltNotes, range)
       metronomeStart()
     } else {
-      startArpeggio(sequence, centsTolerance, 3, ignoreOctave)
-      metronomeStart()
+      startArpeggio(expandedArp, centsTolerance, 3, ignoreOctave, range)
+      if (metronomeEnabled) metronomeStart()
     }
 
     setView('practicing')
-  }, [audioCtx, audioState, audioInitialize, startArpeggio, startRhythm, timingMode, centsTolerance, ignoreOctave, metronomeStart, metronomeStop, bpm, noteDuration])
+  }, [audioCtx, audioState, audioInitialize, startArpeggio, startRhythm, timingMode, centsTolerance, ignoreOctave, metronomeEnabled, metronomeStart, metronomeStop, bpm, noteDuration, instrument])
+
+  const handleDeviceSwitch = useCallback(async (deviceId: string) => {
+    await audioSwitchDevice(deviceId)
+  }, [audioSwitchDevice])
 
   const handleMetronomeToggle = useCallback(() => {
     if (metronomeIsPlaying) {
       metronomeStop()
     } else {
       if (audioState === 'uninitialized') {
-        audioInitialize().then(() => metronomeStart())
+        audioInitialize(saved.selectedDeviceId ?? undefined).then(() => metronomeStart())
       } else {
         metronomeStart()
       }
@@ -424,28 +487,41 @@ function MainApp() {
             onBpmChange={metronome.setBpm}
             onToggle={handleMetronomeToggle}
           />
-          <NoteDurationPicker
-            value={noteDuration}
-            onChange={setNoteDuration}
-            bpm={metronome.bpm}
-          />
         </>
       ) : (
         <>
-          {/* Follow mode: always show metronome */}
-          <MetronomeControls
-            bpm={metronome.bpm}
-            isPlaying={metronome.isPlaying}
-            currentBeat={metronome.currentBeat}
-            beatsPerMeasure={metronome.beatsPerMeasure}
-            onBpmChange={metronome.setBpm}
-            onToggle={handleMetronomeToggle}
-          />
+          {/* Follow mode: checkbox + conditionally-visible metronome controls */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={metronomeEnabled}
+              onChange={(e) => setMetronomeEnabled(e.target.checked)}
+              style={{ accentColor: 'var(--color-accent)', width: '16px', height: '16px', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+              Metronome
+            </span>
+          </label>
+          {metronomeEnabled && (
+            <MetronomeControls
+              bpm={metronome.bpm}
+              isPlaying={metronome.isPlaying}
+              currentBeat={metronome.currentBeat}
+              beatsPerMeasure={metronome.beatsPerMeasure}
+              onBpmChange={metronome.setBpm}
+              onToggle={handleMetronomeToggle}
+            />
+          )}
         </>
       )}
 
       {/* Advanced Settings — always its own section */}
       <AdvancedSettings>
+        <MicSelector
+          devices={audioDevices}
+          currentDeviceId={currentDeviceId ?? ''}
+          onDeviceChange={handleDeviceSwitch}
+        />
         <PitchLeniency
           centsTolerance={centsTolerance}
           onCentsToleranceChange={setCentsTolerance}
@@ -481,6 +557,28 @@ function MainApp() {
           />
           Accept any octave (ignore octave matching)
         </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+            Next Scale Starts On
+          </span>
+          <select
+            value={scaleStartPosition}
+            onChange={(e) => setScaleStartPosition(e.target.value as ScaleStartPosition)}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-surface)',
+              color: 'var(--color-text-primary)',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+            }}
+          >
+            {(Object.entries(SCALE_START_LABELS) as [ScaleStartPosition, string][]).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
       </AdvancedSettings>
     </div>
   )
@@ -498,19 +596,29 @@ function MainApp() {
         view === 'practicing' || view === 'results' ? 'Back' :
         undefined
       }
+      instrumentName={instrument.name}
+      instruments={INSTRUMENTS}
+      instrumentId={instrumentId}
+      onInstrumentChange={setInstrumentId}
     >
       {view === 'home' && (
-        <HomePage onSelectMode={handleSelectMode} />
+        <HomePage onSelectMode={handleSelectMode} initialTimingMode={timingMode} onTimingModeChange={setTimingMode} />
       )}
 
       {view === 'setup' && activeMode === 'scales' && (
         <div style={{ padding: 'var(--space-xl)', width: '100%', boxSizing: 'border-box' }}>
-          <EndlessSetup
+          <ScaleSetup
             availableScales={scale.availableScales}
             onStartSequence={isRhythmMode ? handleStartRhythmPractice : handleStartPractice}
             settingsSlot={setupSettingsSlot}
             hideSkipTransition={isRhythmMode}
-            noteDuration={isRhythmMode ? noteDuration : undefined}
+            noteDuration={noteDuration}
+            onNoteDurationChange={setNoteDuration}
+            bpm={metronome.bpm}
+            scaleStartPosition={scaleStartPosition}
+            defaultOctave={instrument.defaultOctave}
+            clef={instrument.clef}
+            range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
           />
         </div>
       )}
@@ -520,6 +628,12 @@ function MainApp() {
           <ArpeggioSetup
             onStart={handleStartArpeggioPractice}
             settingsSlot={setupSettingsSlot}
+            noteDuration={noteDuration}
+            onNoteDurationChange={setNoteDuration}
+            bpm={metronome.bpm}
+            defaultOctave={instrument.defaultOctave}
+            clef={instrument.clef}
+            range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
           />
         </div>
       )}
@@ -527,41 +641,41 @@ function MainApp() {
       {/* Practicing: scales follow mode */}
       {view === 'practicing' && activeMode === 'scales' && timingMode === 'follow' && (
         <>
-          {endlessState && (
-            <EndlessBanner
-              endlessState={endlessState}
-              lastCompletedScore={lastCompletedScore}
+          {scaleState && (
+            <ScaleBanner
+              scaleState={scaleState}
             />
           )}
 
-          {innerSessionState && endlessState?.phase !== 'transitioning' && (
+          {innerSessionState && (
             <PracticeView
-              scaleNotes={endlessState?.currentScaleNotes ?? []}
+              scaleNotes={scaleState?.currentScaleNotes ?? []}
               sessionState={innerSessionState}
               detectedPitch={pitchResult.pitch}
               noteResult={pitchResult.noteResult}
               onSkipNote={skipNote}
-              chordSymbol={endlessState?.currentChordSymbol}
-              chordSymbols={endlessState?.chordSymbols}
+              chordSymbol={scaleState?.currentChordSymbol}
+              chordSymbols={scaleState?.chordSymbols}
+              noteDuration={noteDuration}
+              restIndices={scaleState?.restIndices}
+              clef={instrument.clef}
             />
           )}
 
-          {endlessState?.phase !== 'transitioning' && (
-            <div style={{ padding: '0 var(--space-xl) var(--space-md)' }}>
-              <MetronomeControls
-                bpm={metronome.bpm}
-                isPlaying={metronome.isPlaying}
-                currentBeat={metronome.currentBeat}
-                beatsPerMeasure={metronome.beatsPerMeasure}
-                onBpmChange={metronome.setBpm}
-                onToggle={() => {
-                  if (metronome.isPlaying) metronomeStop()
-                  else metronomeStart()
-                }}
-                compact
-              />
-            </div>
-          )}
+          <div style={{ padding: '0 var(--space-xl) var(--space-md)' }}>
+            <MetronomeControls
+              bpm={metronome.bpm}
+              isPlaying={metronome.isPlaying}
+              currentBeat={metronome.currentBeat}
+              beatsPerMeasure={metronome.beatsPerMeasure}
+              onBpmChange={metronome.setBpm}
+              onToggle={() => {
+                if (metronome.isPlaying) metronomeStop()
+                else metronomeStart()
+              }}
+              compact
+            />
+          </div>
           <div style={{ padding: '0 var(--space-xl) var(--space-xl)', display: 'flex', justifyContent: 'center' }}>
             <button
               onClick={handleStopPractice}
@@ -601,13 +715,15 @@ function MainApp() {
           detectedPitch={pitchResult.pitch}
           noteResult={pitchResult.noteResult}
           onStop={handleStopPractice}
+          audioContext={audioCtx}
+          clef={instrument.clef}
         />
       )}
 
       {/* Results: scales follow mode */}
-      {view === 'results' && activeMode === 'scales' && timingMode === 'follow' && endlessState && (
-        <EndlessResults
-          endlessState={endlessState}
+      {view === 'results' && activeMode === 'scales' && timingMode === 'follow' && scaleState && (
+        <ScaleResults
+          scaleState={scaleState}
           onRetry={handleRetry}
           onGoHome={handleGoHome}
           onBackToSetup={handleBackToSetup}

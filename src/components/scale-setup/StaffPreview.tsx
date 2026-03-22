@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
-import { buildScaleNotes } from '@core/music/scaleBuilder.ts'
+import { buildAllStepsNotes } from '@core/rhythm/sequence.ts'
+import type { ScaleStartPosition } from '@core/rhythm/types.ts'
+import { getStepChordSymbol } from '@core/endless/presets.ts'
 import { NOTE_DURATION_BEATS } from '@core/rhythm/types.ts'
 import type { NoteDuration } from '@core/rhythm/types.ts'
 import type { Note, ScaleDirection } from '@core/wasm/types.ts'
+import type { ClefType } from '@core/instruments.ts'
 import type { ScaleSequence } from '@core/endless/types.ts'
-import { MeasureStaff, ACCIDENTAL_LEFT_MARGIN, getKeySignature, keySignatureWidth } from '@core/notation'
+import { MeasureStaff, ACCIDENTAL_LEFT_MARGIN, getKeySignature, getKeySignatureForScale, keySignatureWidth } from '@core/notation'
 import type { MeasureLabel } from '@core/notation'
-import styles from './EndlessSetup.module.css'
+import styles from './ScaleSetup.module.css'
 
 /**
  * Minimum pixels per note to avoid cramping.
@@ -20,8 +23,8 @@ const CLEF_EXTRA_WIDTH = 54
 /** Extra width added for the time signature */
 const TIME_SIG_EXTRA_WIDTH = 34
 
-/** Height of each staff line in pixels — must accommodate ledger lines below staff */
-const STAFF_LINE_HEIGHT = 170
+/** Height of each staff line in pixels — must accommodate ledger lines below staff (E1 needs ~190px) */
+const STAFF_LINE_HEIGHT = 230
 
 /** Default time signature */
 const BEATS_PER_MEASURE = 4
@@ -32,26 +35,27 @@ interface StaffPreviewProps {
   direction: ScaleDirection
   numOctaves: number
   noteDuration?: NoteDuration
+  scaleStartPosition?: ScaleStartPosition
+  clef?: ClefType
+  range?: { minMidi: number; maxMidi: number }
 }
 
 /**
- * Build all notes from all steps in a sequence, concatenated into one
- * continuous array. Also returns which note index each step starts at
- * so we can position chord symbol labels on the correct measure.
+ * Thin wrapper around the shared buildAllStepsNotes so the preview
+ * matches rhythm-mode layout exactly (rest padding on strong beats).
  */
 function buildAllPreviewNotes(
   sequence: ScaleSequence,
   direction: ScaleDirection,
   numOctaves: number,
-): { notes: Note[]; stepStartNoteIndices: number[] } {
-  const notes: Note[] = []
-  const stepStartNoteIndices: number[] = []
-  for (const step of sequence.steps) {
-    stepStartNoteIndices.push(notes.length)
-    const { notes: stepNotes } = buildScaleNotes(step, direction, numOctaves)
-    notes.push(...stepNotes)
-  }
-  return { notes, stepStartNoteIndices }
+  noteDuration: NoteDuration,
+  scaleStartPosition?: ScaleStartPosition,
+  range?: { minMidi: number; maxMidi: number },
+): { notes: Note[]; stepStartNoteIndices: number[]; restIndices: Set<number> } {
+  const adjusted = { ...sequence, direction, numOctaves }
+  const { allNotes, boundaries, restIndices } = buildAllStepsNotes(adjusted, false, noteDuration, scaleStartPosition, range)
+  const stepStartNoteIndices = boundaries.map(b => b.startNoteIndex)
+  return { notes: allNotes, stepStartNoteIndices, restIndices }
 }
 
 /**
@@ -132,6 +136,9 @@ export function StaffPreview({
   direction,
   numOctaves,
   noteDuration = 'quarter',
+  scaleStartPosition,
+  clef,
+  range,
 }: StaffPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -148,17 +155,17 @@ export function StaffPreview({
     return () => observer.disconnect()
   }, [])
 
-  // Build all notes from the sequence
-  const { allNotes, stepStartNoteIndices } = useMemo(() => {
-    if (!sequence) return { allNotes: [] as Note[], stepStartNoteIndices: [] as number[] }
+  // Build all notes from the sequence (shared with rhythm mode for consistency)
+  const { allNotes, stepStartNoteIndices, restIndices } = useMemo(() => {
+    if (!sequence) return { allNotes: [] as Note[], stepStartNoteIndices: [] as number[], restIndices: new Set<number>() }
     try {
-      const result = buildAllPreviewNotes(sequence, direction, numOctaves)
-      return { allNotes: result.notes, stepStartNoteIndices: result.stepStartNoteIndices }
+      const result = buildAllPreviewNotes(sequence, direction, numOctaves, noteDuration, scaleStartPosition, range)
+      return { allNotes: result.notes, stepStartNoteIndices: result.stepStartNoteIndices, restIndices: result.restIndices }
     } catch (err) {
       console.error('StaffPreview buildAllPreviewNotes failed:', err)
-      return { allNotes: [] as Note[], stepStartNoteIndices: [] as number[] }
+      return { allNotes: [] as Note[], stepStartNoteIndices: [] as number[], restIndices: new Set<number>() }
     }
-  }, [sequence, direction, numOctaves])
+  }, [sequence, direction, numOctaves, noteDuration, scaleStartPosition, range])
 
   // Group into measures
   const measures = useMemo(
@@ -177,17 +184,31 @@ export function StaffPreview({
       const measureIndex = Math.floor(noteIndex / nPerMeasure)
       const noteIndexInMeasure = noteIndex % nPerMeasure
       const step = sequence.steps[i]
-      if (step.chordSymbol) {
+      const chordText = getStepChordSymbol(step)
+      if (chordText) {
         const existing = labels.get(measureIndex) ?? []
-        existing.push({ noteIndex: noteIndexInMeasure, text: step.chordSymbol })
+        existing.push({ noteIndex: noteIndexInMeasure, text: chordText })
         labels.set(measureIndex, existing)
       }
     }
     return labels
   }, [sequence, stepStartNoteIndices, noteDuration])
 
-  // Compute key signature from all notes
-  const keySig = useMemo(() => getKeySignature(allNotes), [allNotes])
+  // Compute key signature — use circle-of-fifths from first step's root when available,
+  // fall back to note analysis for single-step sequences
+  const keySig = useMemo(() => {
+    if (sequence && sequence.steps.length === 1) {
+      const step = sequence.steps[0]
+      const cofKeySig = getKeySignatureForScale(step.rootNote, 'Major')
+      if (cofKeySig) return cofKeySig
+    }
+    // For multi-step sequences (ii-V-I etc.), skip key signature —
+    // the union of accidentals across different scales/modes is misleading
+    if (sequence && sequence.steps.length > 1) {
+      return { type: 'none' as const, accidentals: [], steps: [] }
+    }
+    return getKeySignature(allNotes)
+  }, [sequence, allNotes])
   const keySigExtraWidth = keySignatureWidth(keySig.accidentals.length)
 
   // Compute measure width based on notes per measure so notes aren't cramped
@@ -211,7 +232,23 @@ export function StaffPreview({
 
   return (
     <div ref={containerRef} className={styles.staffPreviewContainer}>
-      {lineLayouts.map((line, lineIndex) => (
+      {lineLayouts.map((line, lineIndex) => {
+        // Compute total natural width of this line to determine stretch factor
+        let lineNaturalWidth = 0
+        for (let mi = 0; mi < line.measures.length; mi++) {
+          const gmi = line.startMeasureIndex + mi
+          let w = baseMeasureWidth
+          if (gmi === 0) w += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
+          else if (mi === 0) w += CLEF_EXTRA_WIDTH
+          lineNaturalWidth += w
+        }
+        // Stretch to fill the container (but don't stretch more than 1.5x)
+        const isLastLine = lineIndex === lineLayouts.length - 1
+        const stretch = containerWidth > 0 && !isLastLine && lineNaturalWidth < containerWidth
+          ? Math.min(containerWidth / lineNaturalWidth, 1.5)
+          : 1
+
+        return (
         <div key={lineIndex} className={styles.staffPreviewLine}>
           {line.measures.map((measureNotes, measureInLineIndex) => {
             const globalMeasureIndex = line.startMeasureIndex + measureInLineIndex
@@ -221,13 +258,14 @@ export function StaffPreview({
             const showClef = isFirstMeasureOfLine
             const showTimeSignature = isFirstMeasureOfFirstLine
 
-            // Compute width for this measure cell
+            // Compute width for this measure cell, stretched to fill line
             let cellWidth = baseMeasureWidth
             if (isFirstMeasureOfFirstLine) {
               cellWidth += CLEF_EXTRA_WIDTH + TIME_SIG_EXTRA_WIDTH + keySigExtraWidth
             } else if (isFirstMeasureOfLine) {
               cellWidth += CLEF_EXTRA_WIDTH
             }
+            cellWidth = Math.round(cellWidth * stretch)
 
             return (
               <div
@@ -249,13 +287,18 @@ export function StaffPreview({
                   width={cellWidth}
                   height={STAFF_LINE_HEIGHT}
                   showBarline
+                  showFinalBarline={globalMeasureIndex === measures.length - 1}
                   labels={measureLabelsMap.get(globalMeasureIndex)}
+                  restIndices={restIndices}
+                  globalIndexOffset={globalMeasureIndex * notesPerMeasure}
+                  clef={clef}
                 />
               </div>
             )
           })}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

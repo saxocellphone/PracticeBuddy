@@ -9,6 +9,7 @@ import type { ReactNode } from 'react'
 import type { StaffConfig } from '../types.ts'
 import { staffHeight } from '../config.ts'
 import { BassClef } from '../glyphs/BassClef.tsx'
+import { TrebleClef } from '../glyphs/TrebleClef.tsx'
 import { TimeSignature } from '../glyphs/TimeSignature.tsx'
 import { KeySignatureGlyphs } from '../glyphs/KeySignatureGlyphs.tsx'
 
@@ -19,6 +20,7 @@ interface StaveProps {
   showTimeSignature?: boolean
   showKeySignature?: boolean
   showBarline?: boolean
+  showFinalBarline?: boolean
   beatsPerMeasure?: number
   beatValue?: number
   keySignature?: {
@@ -36,6 +38,7 @@ export function Stave({
   showTimeSignature = false,
   showKeySignature = false,
   showBarline = false,
+  showFinalBarline = false,
   beatsPerMeasure = 4,
   beatValue = 4,
   keySignature,
@@ -69,14 +72,23 @@ export function Stave({
         />
       ))}
 
-      {/* Bass clef */}
-      {showClef && (
+      {/* Clef */}
+      {showClef && config.clef === 'bass' && (
         <BassClef
           x={2}
           y={topY - 8}
           width={config.clefWidth - 6}
           height={height + 18}
           color={config.colors.clef}
+        />
+      )}
+      {showClef && config.clef === 'treble' && (
+        <TrebleClef
+          x={2}
+          y={topY - 8}
+          height={height + 18}
+          color={config.colors.clef}
+          config={config}
         />
       )}
 
@@ -100,7 +112,7 @@ export function Stave({
       )}
 
       {/* Barline at right edge */}
-      {showBarline && (
+      {showBarline && !showFinalBarline && (
         <line
           x1={width}
           y1={topY}
@@ -109,6 +121,28 @@ export function Stave({
           stroke={config.colors.staffLine}
           strokeWidth={6}
         />
+      )}
+
+      {/* Final barline (thin + thick) at right edge — fully opaque */}
+      {showFinalBarline && (
+        <>
+          <line
+            x1={width - 10}
+            y1={topY}
+            x2={width - 10}
+            y2={bottomY}
+            stroke="#1a1a2e"
+            strokeWidth={1.5}
+          />
+          <line
+            x1={width - 3}
+            y1={topY}
+            x2={width - 3}
+            y2={bottomY}
+            stroke="#1a1a2e"
+            strokeWidth={5}
+          />
+        </>
       )}
 
       {/* Child elements (notes, rests, beams, etc.) */}

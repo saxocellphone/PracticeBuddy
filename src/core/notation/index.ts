@@ -13,6 +13,7 @@ export { NoteLabel } from './components/NoteLabel.tsx'
 
 // --- Glyph components ---
 export { BassClef } from './glyphs/BassClef.tsx'
+export { TrebleClef } from './glyphs/TrebleClef.tsx'
 export { SharpGlyph } from './glyphs/SharpGlyph.tsx'
 export { FlatGlyph } from './glyphs/FlatGlyph.tsx'
 export { TimeSignature } from './glyphs/TimeSignature.tsx'
@@ -20,7 +21,7 @@ export { KeySignatureGlyphs } from './glyphs/KeySignatureGlyphs.tsx'
 
 // --- Pure functions ---
 export { noteToStaffY, diatonicStep, getLedgerLines } from './pitch.ts'
-export { getKeySignature } from './keySignature.ts'
+export { getKeySignature, getKeySignatureForScale } from './keySignature.ts'
 export { getAccidental } from './accidental.ts'
 export { stemUp, stemX, stemTipY, hasStem } from './stem.ts'
 export { getBeamGroups, computeBeamGeometry } from './beam.ts'
@@ -42,6 +43,7 @@ export {
   GLYPH_SHARP,
   GLYPH_FLAT,
   GLYPH_NATURAL,
+  GLYPH_TREBLE_CLEF,
   GLYPH_BASS_CLEF,
   GLYPH_TIME_DIGITS,
 } from './glyphs.ts'

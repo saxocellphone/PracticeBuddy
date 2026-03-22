@@ -122,6 +122,21 @@ impl ScaleType {
     }
 }
 
+/// Build a sequence of 7 letter names starting from the given root letter.
+/// E.g., root_letter='G' → ['G', 'A', 'B', 'C', 'D', 'E', 'F']
+fn diatonic_letter_sequence(root_letter: char) -> [char; 7] {
+    const LETTERS: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    let start = LETTERS
+        .iter()
+        .position(|&l| l == root_letter.to_ascii_uppercase())
+        .unwrap_or(0);
+    let mut result = [' '; 7];
+    for i in 0..7 {
+        result[i] = LETTERS[(start + i) % 7];
+    }
+    result
+}
+
 pub fn build_scale_internal(
     root_name: &str,
     scale_type: ScaleType,
@@ -129,15 +144,32 @@ pub fn build_scale_internal(
 ) -> Result<Vec<Note>, String> {
     let root = Note::from_name(root_name)?;
     let intervals = scale_type.intervals();
+    let use_flats = root.pitch_class.contains('b');
 
     // Build ascending notes
     let mut ascending = Vec::with_capacity(intervals.len() + 1);
     ascending.push(root.clone());
 
     let mut current_midi = root.midi;
-    for &interval in intervals {
-        current_midi += interval as i32;
-        ascending.push(Note::from_midi(current_midi));
+
+    if intervals.len() == 7 {
+        // 7-note (diatonic) scale: spell each note with a unique letter name
+        let root_letter = root.pitch_class.chars().next().unwrap();
+        let letters = diatonic_letter_sequence(root_letter);
+        for (i, &interval) in intervals.iter().enumerate() {
+            current_midi += interval as i32;
+            let letter = letters[(i + 1) % 7];
+            ascending.push(
+                Note::from_midi_with_letter(current_midi, letter)
+                    .unwrap_or_else(|_| Note::from_midi_with_spelling(current_midi, use_flats))
+            );
+        }
+    } else {
+        // Non-diatonic scale: use flat/sharp spelling based on root
+        for &interval in intervals {
+            current_midi += interval as i32;
+            ascending.push(Note::from_midi_with_spelling(current_midi, use_flats));
+        }
     }
 
     match direction {
@@ -263,21 +295,21 @@ mod tests {
     fn test_c_lydian_dominant() {
         let notes = build_scale_internal("C4", ScaleType::LydianDominant, "ascending").unwrap();
         let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
-        assert_eq!(names, vec!["C4", "D4", "E4", "F#4", "G4", "A4", "A#4", "C5"]);
+        assert_eq!(names, vec!["C4", "D4", "E4", "F#4", "G4", "A4", "Bb4", "C5"]);
     }
 
     #[test]
     fn test_c_altered() {
         let notes = build_scale_internal("C4", ScaleType::Altered, "ascending").unwrap();
         let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
-        assert_eq!(names, vec!["C4", "C#4", "D#4", "E4", "F#4", "G#4", "A#4", "C5"]);
+        assert_eq!(names, vec!["C4", "Db4", "Eb4", "Fb4", "Gb4", "Ab4", "Bb4", "C5"]);
     }
 
     #[test]
     fn test_c_locrian_natural2() {
         let notes = build_scale_internal("C4", ScaleType::LocrianNatural2, "ascending").unwrap();
         let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
-        assert_eq!(names, vec!["C4", "D4", "D#4", "F4", "F#4", "G#4", "A#4", "C5"]);
+        assert_eq!(names, vec!["C4", "D4", "Eb4", "F4", "Gb4", "Ab4", "Bb4", "C5"]);
     }
 
     #[test]
@@ -299,6 +331,35 @@ mod tests {
         let notes = build_scale_internal("C4", ScaleType::BebopDominant, "ascending").unwrap();
         let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
         assert_eq!(names, vec!["C4", "D4", "E4", "F4", "G4", "A4", "A#4", "B4", "C5"]);
+    }
+
+    #[test]
+    fn test_gb_major_diatonic_spelling() {
+        let notes = build_scale_internal("Gb2", ScaleType::Major, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["Gb2", "Ab2", "Bb2", "Cb3", "Db3", "Eb3", "F3", "Gb3"]);
+    }
+
+    #[test]
+    fn test_bb_major_diatonic_spelling() {
+        let notes = build_scale_internal("Bb2", ScaleType::Major, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["Bb2", "C3", "D3", "Eb3", "F3", "G3", "A3", "Bb3"]);
+    }
+
+    #[test]
+    fn test_f_sharp_major_diatonic_spelling() {
+        let notes = build_scale_internal("F#2", ScaleType::Major, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["F#2", "G#2", "A#2", "B2", "C#3", "D#3", "E#3", "F#3"]);
+    }
+
+    #[test]
+    fn test_eb_minor_pentatonic_flat_spelling() {
+        // Non-diatonic (5 intervals): should use flat array for flat root
+        let notes = build_scale_internal("Eb2", ScaleType::MinorPentatonic, "ascending").unwrap();
+        let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, vec!["Eb2", "Gb2", "Ab2", "Bb2", "Db3", "Eb3"]);
     }
 
     #[test]

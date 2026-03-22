@@ -44,23 +44,25 @@ export interface ScaleFormatOptions {
   leftMargin: number
   /** Horizontal distance between note centers. */
   noteSpacing: number
+  /** Duration to assign to each note (default: 'quarter'). */
+  duration?: NoteDuration
 }
 
 /**
- * Lay out notes for a scale display (endless practice mode).
+ * Lay out notes for a scale display (scale practice mode).
  *
- * All notes are rendered as filled quarter-note heads (the scale view
- * does not distinguish durations). Spacing is uniform.
+ * Spacing is uniform. Duration defaults to quarter notes but can
+ * be overridden to render different note head styles.
  */
 export function formatScaleNotes(
   notes: Note[],
   config: StaffConfig,
   options: ScaleFormatOptions,
 ): NoteLayout[] {
-  const { leftMargin, noteSpacing } = options
+  const { leftMargin, noteSpacing, duration = 'quarter' } = options
   return notes.map((note, index) => {
     const x = leftMargin + index * noteSpacing
     const y = noteToStaffY(note, config)
-    return { note, duration: 'quarter' as NoteDuration, x, y, index }
+    return { note, duration, x, y, index }
   })
 }

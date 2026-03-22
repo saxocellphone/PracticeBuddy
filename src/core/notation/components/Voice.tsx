@@ -30,8 +30,18 @@ interface VoiceProps {
   beatsPerMeasure?: number
   /** Index of the currently active note (-1 or undefined for none). */
   activeNoteIndex?: number
-  /** Override the default note color. */
+  /** Override the default note color (used for future/inactive notes). */
   color?: string
+  /** Override the active note color. */
+  activeNoteColor?: string
+  /** Color for notes before the active note (past notes). */
+  pastNoteColor?: string
+  /** When true, per-note accidentals are suppressed (e.g. when a key signature covers them). */
+  hideAccidentals?: boolean
+  /** Global note indices that should render as rests instead of note heads. */
+  restIndices?: Set<number>
+  /** Offset added to each note's local index to get its global index for restIndices lookup. */
+  globalIndexOffset?: number
 }
 
 export function Voice({
@@ -42,6 +52,11 @@ export function Voice({
   beatsPerMeasure = 4,
   activeNoteIndex = -1,
   color,
+  activeNoteColor,
+  pastNoteColor,
+  hideAccidentals = false,
+  restIndices,
+  globalIndexOffset = 0,
 }: VoiceProps) {
   const filterId = useId()
   const glowFilterId = `voice-glow-${filterId.replace(/:/g, '')}`
@@ -75,7 +90,7 @@ export function Voice({
     let remainingBeats = beatsPerMeasure - beatsFilled
     let beatPosition = beatsFilled + 1 // 1-indexed beat where rests start
 
-    const REST_CANDIDATES = [4, 2, 1, 0.5, 0.25]
+    const REST_CANDIDATES = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.375, 0.25]
 
     function largestRestThatFits(remaining: number, beatPos: number): number {
       for (const candidate of REST_CANDIDATES) {
@@ -101,8 +116,29 @@ export function Voice({
     return rests
   }, [notes, beatsPerMeasure, availableWidth, startX])
 
-  // Beam groups and the set of beamed note indices
-  const beamGroups = useMemo(() => getBeamGroups(noteLayouts), [noteLayouts])
+  // Beam groups: split at rest boundaries so notes from different scales
+  // don't get beamed together across a rest.
+  const beamGroups = useMemo(() => {
+    if (restIndices && restIndices.size > 0) {
+      // Split noteLayouts into segments separated by rest indices
+      const segments: NoteLayout[][] = []
+      let current: NoteLayout[] = []
+      for (const l of noteLayouts) {
+        if (restIndices.has(l.index + globalIndexOffset)) {
+          if (current.length > 0) {
+            segments.push(current)
+            current = []
+          }
+        } else {
+          current.push(l)
+        }
+      }
+      if (current.length > 0) segments.push(current)
+      // Compute beam groups within each segment independently
+      return segments.flatMap(seg => getBeamGroups(seg))
+    }
+    return getBeamGroups(noteLayouts)
+  }, [noteLayouts, restIndices, globalIndexOffset])
 
   const beamedIndices = useMemo(() => {
     const set = new Set<number>()
@@ -115,7 +151,7 @@ export function Voice({
   }, [beamGroups])
 
   const noteColor = color ?? config.colors.note
-  const activeColor = config.colors.activeNote
+  const activeColor = activeNoteColor ?? config.colors.activeNote
 
   return (
     <g>
@@ -130,17 +166,74 @@ export function Voice({
         </filter>
       </defs>
 
-      {/* Notes */}
+      {/* Notes and inline rests */}
       {noteLayouts.map((layout) => {
+        const isRest = restIndices?.has(layout.index + globalIndexOffset)
+        if (isRest) {
+          // Check if this is the START of a consecutive rest run
+          const prevIsRest = layout.index > 0 && restIndices?.has((layout.index - 1) + globalIndexOffset)
+          if (prevIsRest) return null // Skip — already rendered by the first rest in the run
+
+          // Count consecutive rests starting here
+          let runLength = 1
+          while (restIndices?.has((layout.index + runLength) + globalIndexOffset) &&
+                 (layout.index + runLength) < notes.length) {
+            runLength++
+          }
+
+          // Compute total rest duration and render consolidated rest glyphs
+          const noteDurationBeats = NOTE_DURATION_BEATS[layout.duration]
+          const totalRestBeats = runLength * noteDurationBeats
+          const expectedCount = Math.round(beatsPerMeasure / noteDurationBeats)
+          const noteSpacing = availableWidth / expectedCount
+
+          // Use rest-filling logic: split into proper rest durations
+          const REST_CANDIDATES = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.375, 0.25]
+          const beatPos = layout.index * noteDurationBeats + 1 // 1-indexed
+          let remaining = totalRestBeats
+          let currentBeatPos = beatPos
+          const rests: { x: number; durationBeats: number }[] = []
+
+          while (remaining > 0.001) {
+            let restBeats = remaining
+            for (const candidate of REST_CANDIDATES) {
+              if (candidate > remaining) continue
+              if (candidate < 4 && currentBeatPos < 3 && currentBeatPos + candidate > 3) continue
+              restBeats = candidate
+              break
+            }
+            const centerBeat = currentBeatPos + restBeats / 2
+            const centerSlot = (centerBeat - 1) / noteDurationBeats
+            const x = startX + noteSpacing * centerSlot
+            rests.push({ x, durationBeats: restBeats })
+            currentBeatPos += restBeats
+            remaining -= restBeats
+          }
+
+          return rests.map((r, ri) => (
+            <Rest
+              key={`rest-${layout.index}-${ri}`}
+              x={r.x}
+              durationBeats={r.durationBeats}
+              color={noteColor}
+              config={config}
+            />
+          ))
+        }
+
         const isActive = layout.index === activeNoteIndex
+        const isPast = pastNoteColor && activeNoteIndex >= 0 && layout.index < activeNoteIndex
+        const resolvedColor = isActive ? activeColor : isPast ? pastNoteColor : noteColor
+
         return (
           <StaveNote
             key={layout.index}
             layout={layout}
             config={config}
-            color={isActive ? activeColor : noteColor}
+            color={resolvedColor}
             isBeamed={beamedIndices.has(layout.index)}
             glowFilterId={isActive ? glowFilterId : undefined}
+            hideAccidentals={hideAccidentals}
           />
         )
       })}

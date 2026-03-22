@@ -11,6 +11,7 @@ import { memo } from 'react'
 import type { Note } from '@core/wasm/types.ts'
 import type { NoteDuration } from '@core/rhythm/types.ts'
 import { NOTE_DURATION_BEATS } from '@core/rhythm/types.ts'
+import type { ClefType } from '@core/instruments.ts'
 import type { StaffConfig } from './types.ts'
 import { DEFAULT_MEASURE_CONFIG } from './config.ts'
 import { Stave } from './components/Stave.tsx'
@@ -44,10 +45,26 @@ interface MeasureStaffProps {
   activeNoteIndex?: number
   /** Show a barline at the right edge of the measure */
   showBarline?: boolean
+  /** Show a final barline (thin + thick) at the right edge — indicates end of piece */
+  showFinalBarline?: boolean
   /** Single label displayed above the staff start (e.g. chord symbol or scale name) */
   label?: string
   /** Per-note labels positioned above specific notes within the measure */
   labels?: MeasureLabel[]
+  /** Global note indices that should render as rests instead of note heads */
+  restIndices?: Set<number>
+  /** Offset added to each note's local index to get its global index for restIndices lookup */
+  globalIndexOffset?: number
+  /** Override the default note color */
+  noteColor?: string
+  /** Override the active note color */
+  activeNoteColor?: string
+  /** Color for notes before the active note (past notes) */
+  pastNoteColor?: string
+  /** When true, per-note accidentals are suppressed (e.g. when a key signature covers them) */
+  hideAccidentals?: boolean
+  /** Override the clef type (defaults to bass) */
+  clef?: ClefType
 }
 
 export const MeasureStaff = memo(function MeasureStaff({
@@ -63,10 +80,18 @@ export const MeasureStaff = memo(function MeasureStaff({
   dimmed = false,
   activeNoteIndex = -1,
   showBarline = false,
+  showFinalBarline = false,
   label,
   labels,
+  restIndices,
+  globalIndexOffset,
+  noteColor,
+  activeNoteColor,
+  pastNoteColor,
+  hideAccidentals,
+  clef,
 }: MeasureStaffProps) {
-  const config: StaffConfig = DEFAULT_MEASURE_CONFIG
+  const config: StaffConfig = clef ? { ...DEFAULT_MEASURE_CONFIG, clef } : DEFAULT_MEASURE_CONFIG
 
   const keySigCount = showKeySignature && keySignature ? keySignature.accidentals.length : 0
   // Content starts after clef + time signature + key signature
@@ -95,7 +120,7 @@ export const MeasureStaff = memo(function MeasureStaff({
       {label && !labels?.length && (
         <text
           x={startX}
-          y={config.staffTopMargin - 14}
+          y={20}
           textAnchor="start"
           fill="var(--color-text-primary)"
           fontSize="18"
@@ -111,7 +136,7 @@ export const MeasureStaff = memo(function MeasureStaff({
         <text
           key={ml.noteIndex}
           x={startX + noteSpacing * (ml.noteIndex + 0.5)}
-          y={config.staffTopMargin - 14}
+          y={20}
           textAnchor="middle"
           fill="var(--color-text-primary)"
           fontSize="18"
@@ -130,6 +155,7 @@ export const MeasureStaff = memo(function MeasureStaff({
         showKeySignature={showKeySignature}
         keySignature={keySignature}
         showBarline={showBarline}
+        showFinalBarline={showFinalBarline}
         beatsPerMeasure={beatsPerMeasure}
         beatValue={beatValue}
       >
@@ -140,6 +166,12 @@ export const MeasureStaff = memo(function MeasureStaff({
           availableWidth={availableWidth}
           beatsPerMeasure={beatsPerMeasure}
           activeNoteIndex={activeNoteIndex}
+          color={noteColor}
+          activeNoteColor={activeNoteColor}
+          pastNoteColor={pastNoteColor}
+          hideAccidentals={hideAccidentals}
+          restIndices={restIndices}
+          globalIndexOffset={globalIndexOffset}
         />
       </Stave>
     </svg>

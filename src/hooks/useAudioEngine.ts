@@ -7,6 +7,8 @@ export function useAudioEngine() {
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
   const [gainNode, setGainNode] = useState<GainNode | null>(null)
   const [sampleRate, setSampleRate] = useState(44100)
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null)
   const engineRef = useRef<AudioEngine | null>(null)
 
   // Create engine on mount
@@ -31,12 +33,25 @@ export function useAudioEngine() {
     }
   }, [])
 
-  const initialize = useCallback(async (): Promise<AudioContext | null> => {
+  const initialize = useCallback(async (deviceId?: string): Promise<AudioContext | null> => {
     if (engineRef.current) {
-      await engineRef.current.initialize()
+      await engineRef.current.initialize(deviceId)
+      // Enumerate devices after first getUserMedia so labels are available
+      const inputDevices = await AudioEngine.enumerateInputDevices()
+      setDevices(inputDevices)
+      setCurrentDeviceId(engineRef.current.currentDeviceId)
       return engineRef.current.audioContext
     }
     return null
+  }, [])
+
+  const switchDevice = useCallback(async (deviceId: string): Promise<void> => {
+    if (!engineRef.current) return
+    await engineRef.current.switchDevice(deviceId)
+    setCurrentDeviceId(engineRef.current.currentDeviceId)
+    // Re-enumerate in case device list changed
+    const inputDevices = await AudioEngine.enumerateInputDevices()
+    setDevices(inputDevices)
   }, [])
 
   const dispose = useCallback(() => {
@@ -49,9 +64,12 @@ export function useAudioEngine() {
     state,
     initialize,
     dispose,
+    switchDevice,
     audioContext,
     analyserNode,
     gainNode,
     sampleRate,
+    devices,
+    currentDeviceId,
   }
 }

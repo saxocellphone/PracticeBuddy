@@ -1,5 +1,7 @@
 import type { Note, SessionState, DetectedPitch, FrequencyToNoteResult } from '@core/wasm/types.ts'
 import type { PositionedChordSymbol } from '@core/endless/types.ts'
+import type { NoteDuration } from '@core/rhythm/types.ts'
+import type { ClefType } from '@core/instruments.ts'
 import { ScaleStaff } from '@core/notation'
 import { PracticeLayout } from './PracticeLayout.tsx'
 import styles from './PracticeView.module.css'
@@ -14,6 +16,12 @@ interface PracticeViewProps {
   chordSymbol?: string | null
   /** Positioned chord symbols for combined mode */
   chordSymbols?: PositionedChordSymbol[]
+  /** Note duration for rendering (defaults to quarter) */
+  noteDuration?: NoteDuration
+  /** Rest indices for strong-beat padding */
+  restIndices?: Set<number>
+  /** Clef type for notation rendering */
+  clef?: ClefType
 }
 
 export function PracticeView({
@@ -23,6 +31,9 @@ export function PracticeView({
   onSkipNote,
   chordSymbol,
   chordSymbols,
+  noteDuration,
+  restIndices,
+  clef,
 }: PracticeViewProps) {
   const holdProgress =
     sessionState.minHoldDetections > 0
@@ -37,6 +48,9 @@ export function PracticeView({
           currentNoteIndex={sessionState.currentNoteIndex}
           chordSymbol={chordSymbol ?? undefined}
           chordSymbols={chordSymbols}
+          noteDuration={noteDuration}
+          restIndices={restIndices}
+          clef={clef}
         />
       }
       noteResult={noteResult}

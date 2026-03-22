@@ -3,9 +3,7 @@ import { getArpeggioIntervals } from '@core/arpeggio/types.ts'
 import type { Note } from '@core/wasm/types.ts'
 import type { ArpeggioStep, ArpeggioDirection } from '@core/arpeggio/types.ts'
 
-// Bass range: E1 (MIDI 28) to roughly G4 (MIDI 67)
-const BASS_MIN_MIDI = 28
-const BASS_MAX_MIDI = 67
+import { BASS_MIN_MIDI, BASS_MAX_MIDI } from './scaleBuilder.ts'
 
 // Roots that conventionally use sharp spellings
 const SHARP_ROOTS = new Set(['G', 'D', 'A', 'E', 'B', 'F#', 'C#'])
@@ -35,13 +33,18 @@ function respellNote(note: Note, rootPitchClass: string): Note {
 
 /**
  * Build arpeggio notes for a given step and direction,
- * automatically adjusting octave to stay within bass guitar range.
+ * automatically adjusting octave to stay within the instrument range.
+ *
+ * @param range Optional MIDI range override. Defaults to bass guitar (E1–G4).
  */
 export function buildArpeggioNotes(
   step: ArpeggioStep,
   direction: ArpeggioDirection,
   numOctaves = 1,
+  range?: { minMidi: number; maxMidi: number },
 ): { notes: Note[]; octaveShift: number } {
+  const minMidi = range?.minMidi ?? BASS_MIN_MIDI
+  const maxMidi = range?.maxMidi ?? BASS_MAX_MIDI
   const intervals = getArpeggioIntervals(step.arpeggioType)
 
   let octave = step.rootOctave
@@ -89,19 +92,40 @@ export function buildArpeggioNotes(
 
   let notes = buildNotes(octave)
 
-  // Shift down if notes exceed bass range
-  while (notes.some((n) => n.midi > BASS_MAX_MIDI) && octave > 1) {
+  // Shift down if notes exceed range
+  while (notes.some((n) => n.midi > maxMidi) && octave > 1) {
     octave -= 1
     octaveShift -= 1
     notes = buildNotes(octave)
   }
 
-  // Shift up if notes are below bass range
-  while (notes.some((n) => n.midi < BASS_MIN_MIDI) && octave < 4) {
+  // Shift up if notes are below range
+  while (notes.some((n) => n.midi < minMidi) && octave < 6) {
     octave += 1
     octaveShift += 1
     notes = buildNotes(octave)
   }
 
   return { notes, octaveShift }
+}
+
+/**
+ * Check whether an arpeggio fits within the instrument range after auto-adjustment.
+ *
+ * @param range Optional MIDI range override. Defaults to bass guitar (E1–G4).
+ */
+export function isArpeggioPlayable(
+  step: ArpeggioStep,
+  direction: ArpeggioDirection,
+  numOctaves = 1,
+  range?: { minMidi: number; maxMidi: number },
+): boolean {
+  const minMidi = range?.minMidi ?? BASS_MIN_MIDI
+  const maxMidi = range?.maxMidi ?? BASS_MAX_MIDI
+  try {
+    const { notes } = buildArpeggioNotes(step, direction, numOctaves, range)
+    return notes.every(n => n.midi >= minMidi && n.midi <= maxMidi)
+  } catch {
+    return false
+  }
 }
