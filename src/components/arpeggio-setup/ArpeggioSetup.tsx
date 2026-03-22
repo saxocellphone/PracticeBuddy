@@ -120,14 +120,12 @@ export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurat
     return [1, 2, 3].filter(n =>
       generatedSequence.steps.every(step => isArpeggioPlayable(step, direction, n, range))
     )
-  }, [generatedSequence, direction])
+  }, [generatedSequence, direction, range])
 
-  // Auto-adjust numOctaves if current selection is no longer playable
-  useEffect(() => {
-    if (playableOctaves.length > 0 && !playableOctaves.includes(numOctaves)) {
-      setNumOctaves(playableOctaves[playableOctaves.length - 1])
-    }
-  }, [playableOctaves, numOctaves])
+  // Derive effective octave count — clamp to playable range without cascading setState
+  const effectiveNumOctaves = playableOctaves.includes(numOctaves)
+    ? numOctaves
+    : (playableOctaves[playableOctaves.length - 1] ?? 1)
 
   const handleStart = () => {
     if (!generatedSequence) return
@@ -135,7 +133,7 @@ export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurat
       ...generatedSequence,
       direction,
       shiftSemitones,
-      numOctaves,
+      numOctaves: effectiveNumOctaves,
       loopCount: shiftSemitones === 0 ? loopCount : undefined,
       shiftUntilKey: shiftSemitones > 0 ? shiftUntilKey : undefined,
     })
@@ -360,7 +358,7 @@ export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurat
           <ArpeggioStaffPreview
             sequence={previewSequence}
             direction={direction}
-            numOctaves={numOctaves}
+            numOctaves={effectiveNumOctaves}
             noteDuration={noteDuration}
           />
         </div>

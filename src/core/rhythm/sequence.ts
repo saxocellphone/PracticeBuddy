@@ -1,8 +1,8 @@
 import { buildScaleNotes } from '@core/music/scaleBuilder.ts'
-import { getStepLabel } from '@core/endless/presets.ts'
+import { getStepLabel } from '@core/scales/presets.ts'
 import { NOTE_DURATION_BEATS } from './types.ts'
 import type { Note } from '@core/wasm/types.ts'
-import type { ScaleSequence } from '@core/endless/types.ts'
+import type { ScaleSequence } from '@core/scales/types.ts'
 import type { NoteDuration, StepBoundary, ScaleStartPosition } from './types.ts'
 
 /**

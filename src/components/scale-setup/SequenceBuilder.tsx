@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { getStepLabel } from '@core/endless/presets.ts'
-import type { ScaleStep, SavedCustomSequence, ScaleSequence } from '@core/endless/types.ts'
+import { getStepLabel } from '@core/scales/presets.ts'
+import type { ScaleStep, SavedCustomSequence, ScaleSequence } from '@core/scales/types.ts'
 import type { ScaleInfo, ScaleDirection } from '@core/wasm/types.ts'
 import styles from './SequenceBuilder.module.css'
 

@@ -1,4 +1,4 @@
-import { transpose } from '@core/endless/presets.ts'
+import { transpose } from '@core/scales/presets.ts'
 import { pitchClassesMatch } from './pitchClass.ts'
 
 function gcd(a: number, b: number): number {

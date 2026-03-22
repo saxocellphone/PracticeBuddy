@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ScaleSessionState } from '@core/endless/types.ts'
+import type { ScaleSessionState } from '@core/scales/types.ts'
 import styles from './ScaleResults.module.css'
 
 interface ScaleResultsProps {

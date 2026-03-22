@@ -18,9 +18,9 @@ import {
   isPitchMatch,
 } from '@core/rhythm/evaluation.ts'
 import { frequencyToNote } from '@core/wasm/noteUtils.ts'
-import { transpose } from '@core/endless/presets.ts'
+import { transpose } from '@core/scales/presets.ts'
 import type { DetectedPitch, Note } from '@core/wasm/types.ts'
-import type { ScaleSequence } from '@core/endless/types.ts'
+import type { ScaleSequence } from '@core/scales/types.ts'
 import type { PitchSample } from '@core/rhythm/evaluation.ts'
 import type {
   NoteDuration,

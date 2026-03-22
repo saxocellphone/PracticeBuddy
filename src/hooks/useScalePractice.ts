@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { usePracticeSession } from './usePracticeSession.ts'
-import { getStepLabel, getStepChordSymbol } from '@core/endless/presets.ts'
+import { getStepLabel, getStepChordSymbol } from '@core/scales/presets.ts'
 import { buildScaleNotes } from '@core/music/scaleBuilder.ts'
 import { buildAllStepsNotes } from '@core/rhythm/sequence.ts'
 import type { NoteDuration, ScaleStartPosition } from '@core/rhythm/types.ts'
@@ -14,7 +14,7 @@ import type {
   ScaleRunResult,
   PositionedChordSymbol,
   CumulativeStats,
-} from '@core/endless/types.ts'
+} from '@core/scales/types.ts'
 
 function computeCumulativeStats(results: ScaleRunResult[]): CumulativeStats {
   const totalScalesCompleted = results.length

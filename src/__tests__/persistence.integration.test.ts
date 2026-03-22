@@ -3,10 +3,10 @@ import {
   loadCustomSequences,
   saveCustomSequence,
   deleteCustomSequence,
-} from '@core/endless/storage.ts'
+} from '@core/scales/storage.ts'
 import { RHYTHM_DURATION_STORAGE_KEY } from '@core/rhythm/types.ts'
 import type { NoteDuration } from '@core/rhythm/types.ts'
-import type { SavedCustomSequence } from '@core/endless/types.ts'
+import type { SavedCustomSequence } from '@core/scales/types.ts'
 import type { ScaleDirection } from '@core/wasm/types.ts'
 
 // ---------------------------------------------------------------------------

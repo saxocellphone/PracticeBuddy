@@ -1,4 +1,4 @@
-import type { ScaleSessionState } from '@core/endless/types.ts'
+import type { ScaleSessionState } from '@core/scales/types.ts'
 import styles from './ScaleBanner.module.css'
 
 interface ScaleBannerProps {

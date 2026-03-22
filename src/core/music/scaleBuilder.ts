@@ -1,6 +1,6 @@
 import { buildScale, getScaleType } from '@core/wasm/scales.ts'
 import type { Note } from '@core/wasm/types.ts'
-import type { ScaleStep } from '@core/endless/types.ts'
+import type { ScaleStep } from '@core/scales/types.ts'
 
 // Bass range: E1 (MIDI 28) to roughly G4 (MIDI 67)
 export const BASS_MIN_MIDI = 28

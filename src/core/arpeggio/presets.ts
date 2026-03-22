@@ -1,6 +1,6 @@
 import type { ArpeggioSequence, ArpeggioStep, ArpeggioType } from './types.ts'
 import { ARPEGGIO_TYPE_LABELS } from './types.ts'
-import { transpose } from '@core/endless/presets.ts'
+import { transpose } from '@core/scales/presets.ts'
 
 // ---- Helpers ----
 

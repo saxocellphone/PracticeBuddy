@@ -1,5 +1,5 @@
 import type { Note } from '@core/wasm/types.ts'
-import type { ScaleSequence, ScaleStep, CumulativeStats } from '@core/endless/types.ts'
+import type { ScaleSequence, ScaleStep, CumulativeStats } from '@core/scales/types.ts'
 
 // ---- Scale start position ----
 

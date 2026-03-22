@@ -1,5 +1,5 @@
 import type { Note, SessionState, DetectedPitch, FrequencyToNoteResult } from '@core/wasm/types.ts'
-import type { PositionedChordSymbol } from '@core/endless/types.ts'
+import type { PositionedChordSymbol } from '@core/scales/types.ts'
 import type { NoteDuration } from '@core/rhythm/types.ts'
 import type { ClefType } from '@core/instruments.ts'
 import { ScaleStaff } from '@core/notation'

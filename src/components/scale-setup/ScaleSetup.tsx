@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react'
-import { PRESETS, PRESET_CATEGORIES } from '@core/endless/presets.ts'
+import { PRESETS, PRESET_CATEGORIES } from '@core/scales/presets.ts'
 import {
   loadCustomSequences,
   saveCustomSequence,
   deleteCustomSequence,
-} from '@core/endless/storage.ts'
-import type { ScaleSequence, ScaleStep, SavedCustomSequence } from '@core/endless/types.ts'
+} from '@core/scales/storage.ts'
+import type { ScaleSequence, ScaleStep, SavedCustomSequence } from '@core/scales/types.ts'
 import { isScalePlayable } from '@core/music/scaleBuilder.ts'
 import { expandSequenceWithLoops } from '@core/music/sequenceExpander.ts'
 import type { ClefType } from '@core/instruments.ts'
@@ -142,14 +142,12 @@ export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, not
     return [1, 2, 3].filter(n =>
       generatedSequence.steps.every(step => isScalePlayable(step, direction, n, range))
     )
-  }, [generatedSequence, isBasicPreset, basicDirection])
+  }, [generatedSequence, basicDirection, range])
 
-  // Auto-adjust numOctaves if current selection is no longer playable
-  useEffect(() => {
-    if (playableOctaves.length > 0 && !playableOctaves.includes(numOctaves)) {
-      setNumOctaves(playableOctaves[playableOctaves.length - 1])
-    }
-  }, [playableOctaves, numOctaves])
+  // Derive effective octave count — clamp to playable range without cascading setState
+  const effectiveNumOctaves = playableOctaves.includes(numOctaves)
+    ? numOctaves
+    : (playableOctaves[playableOctaves.length - 1] ?? 1)
 
   const handleStartPreset = () => {
     if (generatedSequence) {
@@ -159,7 +157,7 @@ export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, not
         direction,
         shiftSemitones,
         skipTransition,
-        numOctaves,
+        numOctaves: effectiveNumOctaves,
         loopCount: shiftSemitones === 0 ? loopCount : undefined,
         shiftUntilKey: shiftSemitones > 0 ? shiftUntilKey : undefined,
       })
@@ -175,7 +173,7 @@ export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, not
       direction: saved.direction,
       shiftSemitones: saved.shiftSemitones,
       skipTransition: saved.skipTransition,
-      numOctaves,
+      numOctaves: effectiveNumOctaves,
     }
     onStartSequence(seq)
   }
@@ -546,7 +544,7 @@ export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, not
         <StaffPreview
           sequence={previewSequence}
           direction={basicDirection}
-          numOctaves={numOctaves}
+          numOctaves={effectiveNumOctaves}
           noteDuration={noteDuration}
           scaleStartPosition={scaleStartPosition}
           clef={clef}

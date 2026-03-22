@@ -53,15 +53,15 @@ WASM Bindings (src/core/wasm/pkg/) ← Rust-generated
 ```
 
 **Key hooks:**
-- `useEndlessPractice` — main session orchestration, coordinates all other hooks
+- `useScalePractice` — main scale session orchestration, coordinates all other hooks
 - `usePitchDetection` — reads frequency from `AudioEngine`, feeds to WASM validation
 - `useWasm` — loads and initializes the WASM module
 - `useAudioEngine` — wraps `AudioEngine` class (microphone + Web Audio API)
 - `useMetronome` — wraps `MetronomeEngine` class
 
-### Endless Practice Mode (`src/core/endless/`)
+### Scale Sequences (`src/core/scales/`)
 
-The primary practice mode. A `ScaleSequence` defines an ordered list of scales to cycle through. Presets (e.g. circle-of-fifths transpositions) live in `presets.ts`. Custom sequences persist via `localStorage` (`storage.ts`).
+A `ScaleSequence` defines an ordered list of scales to cycle through. Presets (e.g. circle-of-fifths transpositions) live in `presets.ts`. Custom sequences persist via `localStorage` (`storage.ts`).
 
 ### WASM Layer (`src/core/wasm/`)
 

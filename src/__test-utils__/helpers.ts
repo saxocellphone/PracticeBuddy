@@ -1,7 +1,7 @@
 import type { DetectedPitch, Note, ScaleDirection } from '@core/wasm/types.ts'
 import type { TimingWindows } from '@core/rhythm/types.ts'
 import type { PitchSample } from '@core/rhythm/evaluation.ts'
-import type { ScaleSequence } from '@core/endless/types.ts'
+import type { ScaleSequence } from '@core/scales/types.ts'
 
 // ---------------------------------------------------------------------------
 // Pitch & Note factories

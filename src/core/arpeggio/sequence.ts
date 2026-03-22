@@ -1,8 +1,8 @@
 import { buildArpeggioNotes } from '@core/music/arpeggioBuilder.ts'
 import { getArpeggioStepLabel } from './presets.ts'
-import { transpose } from '@core/endless/presets.ts'
+import { transpose } from '@core/scales/presets.ts'
 import type { Note } from '@core/wasm/types.ts'
-import type { ScaleSequence, ScaleStep } from '@core/endless/types.ts'
+import type { ScaleSequence, ScaleStep } from '@core/scales/types.ts'
 import type { StepBoundary } from '@core/rhythm/types.ts'
 import type { ArpeggioSequence, ArpeggioStep } from './types.ts'
 

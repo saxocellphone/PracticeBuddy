@@ -10,7 +10,7 @@ import type {
   RhythmNoteEvent,
 } from '@core/rhythm/types.ts'
 import { COUNTDOWN_BEATS } from '@hooks/useRhythmPractice.ts'
-import { getStepChordSymbol } from '@core/endless/presets.ts'
+import { getStepChordSymbol } from '@core/scales/presets.ts'
 import { MeasureStaff } from '@core/notation'
 import type { MeasureLabel } from '@core/notation'
 import { HitMissFeedback } from './HitMissFeedback.tsx'
@@ -115,8 +115,12 @@ export function RhythmPracticeView({
   const scrollRafRef = useRef(0)
   const startTimeStable = useRef(sessionState.startTime)
   const phaseStable = useRef(sessionState.phase)
-  startTimeStable.current = sessionState.startTime
-  phaseStable.current = sessionState.phase
+
+  // Sync refs in an effect (not during render) to satisfy React rules
+  useEffect(() => {
+    startTimeStable.current = sessionState.startTime
+    phaseStable.current = sessionState.phase
+  }, [sessionState.startTime, sessionState.phase])
 
   useEffect(() => {
     const tick = () => {
