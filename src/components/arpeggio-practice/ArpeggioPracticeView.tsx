@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { SessionState, DetectedPitch, FrequencyToNoteResult, SessionScore } from '@core/wasm/types.ts'
 import type { ArpeggioSessionState } from '@core/arpeggio/types.ts'
+import type { ClefType } from '@core/instruments.ts'
 import { ScaleStaff } from '@core/notation'
 import { PracticeLayout } from '@components/practice-view/PracticeLayout.tsx'
 import styles from './ArpeggioPracticeView.module.css'
@@ -12,6 +13,7 @@ interface ArpeggioPracticeViewProps {
   noteResult: FrequencyToNoteResult | null
   onSkipNote: () => void
   onStop: () => void
+  clef?: ClefType
 }
 
 export function ArpeggioPracticeView({
@@ -20,6 +22,7 @@ export function ArpeggioPracticeView({
   noteResult,
   onSkipNote,
   onStop,
+  clef,
 }: ArpeggioPracticeViewProps) {
   const {
     sequence,
@@ -172,6 +175,7 @@ export function ArpeggioPracticeView({
           scaleNotes={currentNotes}
           currentNoteIndex={sessionState.currentNoteIndex}
           chordSymbol={currentLabel}
+          clef={clef}
         />
       }
       noteResult={noteResult}

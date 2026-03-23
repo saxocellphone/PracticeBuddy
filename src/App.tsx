@@ -8,6 +8,7 @@ import { useScaleSelection } from "@hooks/useScaleSelection.ts";
 import { useScalePractice } from "@hooks/useScalePractice.ts";
 import { useRhythmPractice } from "@hooks/useRhythmPractice.ts";
 import { useArpeggioPractice } from "@hooks/useArpeggioPractice.ts";
+import { useWalkingBassPractice } from "@hooks/useWalkingBassPractice.ts";
 import { getInstrument, INSTRUMENTS } from "@core/instruments.ts";
 import { sensitivityToThresholds } from "@core/audio/sensitivity.ts";
 import { AppShell } from "@components/layout/AppShell.tsx";
@@ -26,8 +27,18 @@ import { ScaleBanner } from "@components/practice-view/ScaleBanner.tsx";
 import { ArpeggioSetup } from "@components/arpeggio-setup/ArpeggioSetup.tsx";
 import { ArpeggioPracticeView } from "@components/arpeggio-practice/ArpeggioPracticeView.tsx";
 import { ArpeggioResults } from "@components/arpeggio-results/ArpeggioResults.tsx";
+import { WalkingBassSetup } from "@components/walking-bass-setup/WalkingBassSetup.tsx";
+import { WalkingBassResults } from "@components/walking-bass-results/WalkingBassResults.tsx";
 import type { ScaleSequence, ScaleStep } from "@core/scales/types.ts";
 import type { ArpeggioSequence, ArpeggioStep } from "@core/arpeggio/types.ts";
+import type {
+  WalkingBassSequence,
+  WalkingBassStep,
+} from "@core/walking-bass/types.ts";
+import {
+  buildAllWalkingBassStepsNotes,
+  walkingBassToScaleSequence,
+} from "@core/walking-bass/sequence.ts";
 import {
   buildAllArpeggioStepsNotes,
   arpeggioToScaleSequence,
@@ -68,6 +79,19 @@ function expandArpSeq(seq: ArpeggioSequence): ArpeggioSequence {
   return expanded.steps.length > 1
     ? { ...expanded, skipTransition: true }
     : expanded;
+}
+
+function expandWalkingBassSeq(seq: WalkingBassSequence): WalkingBassSequence {
+  return expandSequenceWithLoops<WalkingBassSequence, WalkingBassStep>(
+    seq,
+    (step: WalkingBassStep) => ({ root: step.root, octave: step.rootOctave }),
+    (step: WalkingBassStep, pitchClass: string, octave: number) => ({
+      ...step,
+      root: pitchClass,
+      rootOctave: octave,
+      label: undefined,
+    }),
+  );
 }
 
 type AppView = "home" | "setup" | "practicing" | "results";
@@ -167,10 +191,11 @@ function loadSettings(): PersistedSettings {
         parsed.timingMode === "follow" || parsed.timingMode === "rhythm"
           ? parsed.timingMode
           : DEFAULT_SETTINGS.timingMode,
-      activeMode:
-        parsed.activeMode === "scales" || parsed.activeMode === "arpeggios"
-          ? parsed.activeMode
-          : DEFAULT_SETTINGS.activeMode,
+      activeMode: ["scales", "arpeggios", "walking-bass"].includes(
+        parsed.activeMode,
+      )
+        ? parsed.activeMode
+        : DEFAULT_SETTINGS.activeMode,
       micSensitivity:
         typeof parsed.micSensitivity === "number" &&
         parsed.micSensitivity >= 0 &&
@@ -345,6 +370,16 @@ function MainApp() {
     skipArpeggio,
   } = useArpeggioPractice();
 
+  // Walking bass practice mode
+  const {
+    walkingBassState,
+    innerSessionState: wbInnerSessionState,
+    startWalkingBass,
+    stopWalkingBass,
+    processFrame: wbProcessFrame,
+    skipNote: wbSkipNote,
+  } = useWalkingBassPractice();
+
   // Feed pitch detection into scales (follow mode)
   useEffect(() => {
     if (view !== "practicing" || !pitchResult.pitch) return;
@@ -373,6 +408,22 @@ function MainApp() {
     pitchResult.pitch,
     arpeggioSessionState?.phase,
     processArpeggioFrame,
+    activeMode,
+    timingMode,
+  ]);
+
+  // Feed pitch detection into walking bass (follow mode)
+  useEffect(() => {
+    if (view !== "practicing" || !pitchResult.pitch) return;
+    if (activeMode !== "walking-bass" || timingMode !== "follow") return;
+    if (wbInnerSessionState?.phase === "Playing") {
+      wbProcessFrame(pitchResult.pitch);
+    }
+  }, [
+    view,
+    pitchResult.pitch,
+    wbInnerSessionState?.phase,
+    wbProcessFrame,
     activeMode,
     timingMode,
   ]);
@@ -429,6 +480,16 @@ function MainApp() {
     }
   }, [view, arpeggioState?.phase, metronomeStop, activeMode, timingMode]);
 
+  // Auto-transition to results when stopped (walking bass follow mode)
+  useEffect(() => {
+    if (view !== "practicing") return;
+    if (activeMode !== "walking-bass" || timingMode !== "follow") return;
+    if (walkingBassState?.phase === "stopped") {
+      metronomeStop();
+      queueMicrotask(() => setView("results"));
+    }
+  }, [view, walkingBassState?.phase, metronomeStop, activeMode, timingMode]);
+
   // Auto-transition to results when stopped (rhythm mode, any content type)
   useEffect(() => {
     if (view !== "practicing") return;
@@ -445,17 +506,19 @@ function MainApp() {
     stopScalePractice();
     stopRhythm();
     stopArpeggio();
+    stopWalkingBass();
     metronomeStop();
     setView("home");
-  }, [stopScalePractice, stopRhythm, stopArpeggio, metronomeStop]);
+  }, [stopScalePractice, stopRhythm, stopArpeggio, stopWalkingBass, metronomeStop]);
 
   const handleBackToSetup = useCallback(() => {
     stopScalePractice();
     stopRhythm();
     stopArpeggio();
+    stopWalkingBass();
     metronomeStop();
     setView("setup");
-  }, [stopScalePractice, stopRhythm, stopArpeggio, metronomeStop]);
+  }, [stopScalePractice, stopRhythm, stopArpeggio, stopWalkingBass, metronomeStop]);
 
   const handleSelectMode = useCallback(
     (mode: PracticeMode, timing: TimingMode) => {
@@ -470,6 +533,7 @@ function MainApp() {
 
   const scaleSequenceRef = useRef<ScaleSequence | null>(null);
   const arpeggioSequenceRef = useRef<ArpeggioSequence | null>(null);
+  const walkingBassSequenceRef = useRef<WalkingBassSequence | null>(null);
 
   const handleStartPractice = useCallback(
     async (sequence: ScaleSequence) => {
@@ -514,6 +578,8 @@ function MainApp() {
   const handleStopPractice = useCallback(() => {
     if (timingMode === "rhythm") {
       stopRhythm();
+    } else if (activeMode === "walking-bass") {
+      stopWalkingBass();
     } else if (activeMode === "arpeggios") {
       stopArpeggio();
     } else {
@@ -526,14 +592,37 @@ function MainApp() {
     stopScalePractice,
     stopRhythm,
     stopArpeggio,
+    stopWalkingBass,
     metronomeStop,
   ]);
 
   const handleRetry = useCallback(() => {
     const range = { minMidi: instrument.minMidi, maxMidi: instrument.maxMidi };
     if (timingMode === "rhythm") {
-      // Rhythm retry — works for both scales and arpeggios
-      if (activeMode === "arpeggios") {
+      // Rhythm retry — works for scales, arpeggios, and walking bass
+      if (activeMode === "walking-bass") {
+        if (!walkingBassSequenceRef.current) return;
+        const { allNotes, boundaries } = buildAllWalkingBassStepsNotes(
+          walkingBassSequenceRef.current,
+          range,
+        );
+        const adapted = walkingBassToScaleSequence(
+          walkingBassSequenceRef.current,
+        );
+        scaleSequenceRef.current = adapted;
+        metronomeStop();
+        startRhythm(
+          adapted,
+          bpm,
+          "quarter",
+          centsTolerance,
+          ignoreOctave,
+          audioCtx ?? undefined,
+          { allNotes, boundaries, restIndices: new Set() },
+          range,
+        );
+        metronomeStart();
+      } else if (activeMode === "arpeggios") {
         if (!arpeggioSequenceRef.current) return;
         const prebuiltNotes = buildAllArpeggioStepsNotes(
           arpeggioSequenceRef.current,
@@ -577,6 +666,20 @@ function MainApp() {
 
     // Follow retry
     metronomeStop();
+    if (activeMode === "walking-bass") {
+      if (!walkingBassSequenceRef.current) return;
+      startWalkingBass(
+        walkingBassSequenceRef.current,
+        centsTolerance,
+        3,
+        ignoreOctave,
+        range,
+      );
+      if (metronomeEnabled) metronomeStart();
+      setView("practicing");
+      return;
+    }
+
     if (activeMode === "arpeggios") {
       if (!arpeggioSequenceRef.current) return;
       startArpeggio(
@@ -609,6 +712,7 @@ function MainApp() {
     startScalePractice,
     startRhythm,
     startArpeggio,
+    startWalkingBass,
     centsTolerance,
     ignoreOctave,
     metronomeEnabled,
@@ -731,6 +835,66 @@ function MainApp() {
       metronomeStop,
       bpm,
       noteDuration,
+      instrument,
+    ],
+  );
+
+  // Walking bass start handler
+  const handleStartWalkingBassPractice = useCallback(
+    async (sequence: WalkingBassSequence) => {
+      let ctx = audioCtx;
+      if (audioState === "uninitialized") {
+        ctx = await audioInitialize(saved.selectedDeviceId ?? undefined);
+      }
+
+      const expanded = expandWalkingBassSeq(sequence);
+      walkingBassSequenceRef.current = expanded;
+      const range = {
+        minMidi: instrument.minMidi,
+        maxMidi: instrument.maxMidi,
+      };
+
+      if (timingMode === "rhythm") {
+        if (!ctx) return;
+        const { allNotes, boundaries } = buildAllWalkingBassStepsNotes(
+          expanded,
+          range,
+        );
+        const adapted = walkingBassToScaleSequence(expanded);
+        scaleSequenceRef.current = adapted;
+        metronomeStop();
+        startRhythm(
+          adapted,
+          bpm,
+          "quarter",
+          centsTolerance,
+          ignoreOctave,
+          ctx,
+          { allNotes, boundaries, restIndices: new Set() },
+          range,
+        );
+        metronomeStart();
+      } else {
+        startWalkingBass(expanded, centsTolerance, 3, ignoreOctave, range);
+        if (metronomeEnabled) metronomeStart();
+      }
+
+      setView("practicing");
+    },
+    [
+      saved.selectedDeviceId,
+      audioCtx,
+      audioState,
+      audioInitialize,
+      startWalkingBass,
+      startRhythm,
+      timingMode,
+      centsTolerance,
+      ignoreOctave,
+      metronomeEnabled,
+      metronomeStart,
+      metronomeStop,
+      bpm,
       instrument,
     ],
   );
@@ -1012,6 +1176,28 @@ function MainApp() {
             defaultOctave={instrument.defaultOctave}
             clef={instrument.clef}
             range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
+            scaleStartPosition={scaleStartPosition}
+          />
+        </div>
+      )}
+
+      {view === "setup" && activeMode === "walking-bass" && (
+        <div
+          style={{
+            padding: "var(--space-xl)",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <WalkingBassSetup
+            onStart={handleStartWalkingBassPractice}
+            settingsSlot={setupSettingsSlot}
+            defaultOctave={instrument.defaultOctave}
+            clef={instrument.clef}
+            range={{
+              minMidi: instrument.minMidi,
+              maxMidi: instrument.maxMidi,
+            }}
           />
         </div>
       )}
@@ -1089,7 +1275,79 @@ function MainApp() {
             noteResult={pitchResult.noteResult}
             onSkipNote={skipArpeggio}
             onStop={handleStopPractice}
+            clef={instrument.clef}
           />
+        )}
+
+      {/* Practicing: walking bass follow mode */}
+      {view === "practicing" &&
+        activeMode === "walking-bass" &&
+        timingMode === "follow" && (
+          <>
+            {walkingBassState && (
+              <div
+                style={{
+                  padding: "var(--space-sm) var(--space-xl)",
+                  textAlign: "center",
+                  fontSize: "1.1rem",
+                  fontWeight: 600,
+                  color: "var(--color-text-primary)",
+                }}
+              >
+                {walkingBassState.currentChordSymbol ??
+                  walkingBassState.currentLabel}
+              </div>
+            )}
+
+            {wbInnerSessionState && (
+              <PracticeView
+                scaleNotes={walkingBassState?.currentNotes ?? []}
+                sessionState={wbInnerSessionState}
+                detectedPitch={pitchResult.pitch}
+                noteResult={pitchResult.noteResult}
+                onSkipNote={wbSkipNote}
+                chordSymbol={walkingBassState?.currentChordSymbol}
+                clef={instrument.clef}
+              />
+            )}
+
+            <div style={{ padding: "0 var(--space-xl) var(--space-md)" }}>
+              <MetronomeControls
+                bpm={metronome.bpm}
+                isPlaying={metronome.isPlaying}
+                currentBeat={metronome.currentBeat}
+                beatsPerMeasure={metronome.beatsPerMeasure}
+                onBpmChange={metronome.setBpm}
+                onToggle={() => {
+                  if (metronome.isPlaying) metronomeStop();
+                  else metronomeStart();
+                }}
+                compact
+              />
+            </div>
+            <div
+              style={{
+                padding: "0 var(--space-xl) var(--space-xl)",
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                onClick={handleStopPractice}
+                style={{
+                  padding: "8px 24px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--color-surface)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "0.85rem",
+                  color: "var(--color-text-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                Stop Practice
+              </button>
+            </div>
+          </>
         )}
 
       {/* Practicing: rhythm mode (any content type) */}
@@ -1128,6 +1386,19 @@ function MainApp() {
         arpeggioState && (
           <ArpeggioResults
             sessionState={arpeggioState}
+            onRetry={handleRetry}
+            onGoHome={handleGoHome}
+            onBackToSetup={handleBackToSetup}
+          />
+        )}
+
+      {/* Results: walking bass follow mode */}
+      {view === "results" &&
+        activeMode === "walking-bass" &&
+        timingMode === "follow" &&
+        walkingBassState && (
+          <WalkingBassResults
+            sessionState={walkingBassState}
             onRetry={handleRetry}
             onGoHome={handleGoHome}
             onBackToSetup={handleBackToSetup}

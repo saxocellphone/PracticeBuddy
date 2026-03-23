@@ -2,7 +2,7 @@ import { useState } from 'react'
 import styles from './HomePage.module.css'
 
 /** Content type — what instrument/theory concept to practice */
-export type PracticeMode = 'scales' | 'arpeggios'
+export type PracticeMode = 'scales' | 'arpeggios' | 'walking-bass'
 
 /** Timing mode — how the practice session is paced */
 export type TimingMode = 'follow' | 'rhythm'
@@ -38,6 +38,15 @@ const MODES: ModeOption[] = [
     icon: '🎶',
     accentColor: 'rgba(6, 182, 212, 1)',
     iconBg: 'rgba(6, 182, 212, 0.1)',
+  },
+  {
+    id: 'walking-bass',
+    title: 'Walking Bass',
+    followDescription: 'Practice walking bass lines over chord progressions',
+    rhythmDescription: 'Walk bass lines in time with the metronome',
+    icon: '🚶',
+    accentColor: 'rgba(245, 158, 11, 1)',
+    iconBg: 'rgba(245, 158, 11, 0.1)',
   },
 ]
 

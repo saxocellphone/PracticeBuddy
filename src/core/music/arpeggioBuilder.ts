@@ -16,10 +16,24 @@ const SHARP_TO_FLAT: Record<string, string> = {
   'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb',
 }
 
-/** Respell a note's pitch class to match the root's accidental convention */
-function respellNote(note: Note, rootPitchClass: string): Note {
-  const useSharp = SHARP_ROOTS.has(rootPitchClass)
+// Intervals (in semitones) that should always use flat spelling in jazz:
+// b3 (3), b5 (6), b7 (10)
+const FLAT_INTERVALS = new Set([3, 6, 10])
 
+/** Respell a note using jazz conventions:
+ *  b3, b5, b7 always use flats; other notes follow root convention */
+function respellNote(note: Note, rootPitchClass: string, intervalFromRoot?: number): Note {
+  // Force flat spelling for b3, b5, b7 intervals
+  if (intervalFromRoot !== undefined) {
+    const semitoneClass = ((intervalFromRoot % 12) + 12) % 12
+    if (FLAT_INTERVALS.has(semitoneClass)) {
+      const flat = SHARP_TO_FLAT[note.pitchClass]
+      if (flat) return { ...note, pitchClass: flat, name: `${flat}${note.octave}` }
+      return note
+    }
+  }
+
+  const useSharp = SHARP_ROOTS.has(rootPitchClass)
   if (useSharp) {
     const sharp = FLAT_TO_SHARP[note.pitchClass]
     if (!sharp) return note
@@ -55,7 +69,7 @@ export function buildArpeggioNotes(
       const root = noteFromName(`${step.root}${startOctave}`)
       const ascending = intervals.map((interval) => {
         const note = interval === 0 ? root : noteFromMidi(root.midi + interval)
-        return respellNote(note, step.root)
+        return respellNote(note, step.root, interval)
       })
 
       if (direction === 'ascending') return ascending
@@ -70,7 +84,7 @@ export function buildArpeggioNotes(
       const root = noteFromName(`${step.root}${startOctave + i}`)
       const octNotes = intervals.map((interval) => {
         const note = interval === 0 ? root : noteFromMidi(root.midi + interval)
-        return respellNote(note, step.root)
+        return respellNote(note, step.root, interval)
       })
       if (i === 0) {
         ascendingNotes.push(...octNotes)
