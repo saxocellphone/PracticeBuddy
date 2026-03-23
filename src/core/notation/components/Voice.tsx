@@ -93,10 +93,14 @@ export function Voice({
     const REST_CANDIDATES = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.375, 0.25]
 
     function largestRestThatFits(remaining: number, beatPos: number): number {
+      // If mid-beat, cap at the distance to the next beat boundary
+      const fraction = beatPos % 1.0
+      const onBeat = fraction < 0.001 || fraction > 0.999
+      const maxForPosition = onBeat ? remaining : 1.0 - fraction
+
       for (const candidate of REST_CANDIDATES) {
         if (candidate > remaining) continue
-        // Check beat-3 crossing: skip if starts before beat 3 and ends after beat 3
-        // Exception: whole rest (4 beats) is always OK
+        if (!onBeat && candidate > maxForPosition + 0.001) continue
         if (candidate < 4 && beatPos < 3 && beatPos + candidate > 3) continue
         return candidate
       }
@@ -195,9 +199,15 @@ export function Voice({
           const rests: { x: number; durationBeats: number }[] = []
 
           while (remaining > 0.001) {
+            // If mid-beat, cap at the distance to the next beat boundary
+            const fraction = currentBeatPos % 1.0
+            const onBeat = fraction < 0.001 || fraction > 0.999
+            const maxForPosition = onBeat ? remaining : 1.0 - fraction
+
             let restBeats = remaining
             for (const candidate of REST_CANDIDATES) {
               if (candidate > remaining) continue
+              if (!onBeat && candidate > maxForPosition + 0.001) continue
               if (candidate < 4 && currentBeatPos < 3 && currentBeatPos + candidate > 3) continue
               restBeats = candidate
               break

@@ -499,7 +499,7 @@ describe('useScalePractice — integration', () => {
       )
     })
 
-    it('shows combined label with all step names', () => {
+    it('shows sequence name as combined label', () => {
       const sequence = makeTestSequence({ steps: 2, skipTransition: true })
       const { result } = renderHook(() => useScalePractice())
 
@@ -507,8 +507,7 @@ describe('useScalePractice — integration', () => {
         result.current.startScalePractice(sequence, 40, 3, true)
       })
 
-      // Labels are "Step 1" and "Step 2" with ignoreOctave stripping digits → "Step → Step"
-      expect(result.current.scaleState!.currentLabel).toContain('\u2192')
+      expect(result.current.scaleState!.currentLabel).toBe('Test Sequence')
     })
 
     it('captures result after completing all combined notes', () => {

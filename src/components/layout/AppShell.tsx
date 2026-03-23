@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, type ReactNode } from 'react'
 import type { InstrumentConfig } from '@core/instruments.ts'
 import styles from './AppShell.module.css'
 
+export type TimingMode = 'sheet-music' | 'follow' | 'rhythm'
+
 interface AppShellProps {
   children: ReactNode
   onGoHome?: () => void
@@ -11,9 +13,18 @@ interface AppShellProps {
   instruments?: Record<string, InstrumentConfig>
   instrumentId?: string
   onInstrumentChange?: (id: string) => void
+  timingMode?: TimingMode
+  onTimingModeChange?: (mode: TimingMode) => void
+  showTimingToggle?: boolean
 }
 
-export function AppShell({ children, onGoHome, onBack, backLabel = 'Home', instrumentName, instruments, instrumentId, onInstrumentChange }: AppShellProps) {
+const TIMING_OPTIONS: { id: TimingMode; label: string; icon: string }[] = [
+  { id: 'sheet-music', label: 'Sheet Music', icon: '📄' },
+  { id: 'follow', label: 'Follow', icon: '🎯' },
+  { id: 'rhythm', label: 'Rhythm', icon: '🥁' },
+]
+
+export function AppShell({ children, onGoHome, onBack, backLabel = 'Home', instrumentName, instruments, instrumentId, onInstrumentChange, timingMode, onTimingModeChange, showTimingToggle }: AppShellProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const badgeRef = useRef<HTMLDivElement>(null)
 
@@ -81,6 +92,20 @@ export function AppShell({ children, onGoHome, onBack, backLabel = 'Home', instr
           </div>
         ) : (
           <span className={styles.badge}>{displayName}</span>
+        )}
+        {showTimingToggle && timingMode && onTimingModeChange && (
+          <div className={styles.timingToggle}>
+            {TIMING_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                className={`${styles.timingOption} ${timingMode === opt.id ? styles.timingOptionActive : ''}`}
+                onClick={() => onTimingModeChange(opt.id)}
+              >
+                <span className={styles.timingIcon}>{opt.icon}</span>
+                {opt.label}
+              </button>
+            ))}
+          </div>
         )}
       </header>
       <main className={styles.main}>{children}</main>

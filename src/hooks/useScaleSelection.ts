@@ -1,10 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { listScaleTypes, buildScale, getScaleType } from '@core/wasm/scales.ts'
 import type { Note, ScaleInfo, ScaleDirection } from '@core/wasm/types.ts'
-
-const PITCH_CLASSES = [
-  'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
-] as const
+import { PITCH_CLASSES } from '@core/music/pitchClass.ts'
 
 const STORAGE_KEY = 'practicebuddy:scale-selection'
 

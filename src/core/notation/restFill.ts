@@ -5,12 +5,22 @@ const REST_CANDIDATES = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.375, 0.25] as const
 
 /**
  * Find the largest rest that fits the remaining beats at the current beat position.
- * Enforces the standard engraving rule: never use a single rest that crosses
- * beat 3 (the middle of a 4/4 bar), unless it is a whole rest filling the bar.
+ * Enforces two standard engraving rules:
+ * 1. A rest starting mid-beat must not cross the next beat boundary — fill to
+ *    the beat line first, then use larger rests for remaining full beats.
+ * 2. A rest must not cross beat 3 (the middle of a 4/4 bar) unless it is a
+ *    whole rest filling the entire bar.
  */
 function largestRestThatFits(remaining: number, beatPosition: number): number {
+  // If mid-beat, cap at the distance to the next beat boundary
+  const fraction = beatPosition % 1.0
+  const onBeat = fraction < 0.001 || fraction > 0.999
+  const maxForPosition = onBeat ? remaining : 1.0 - fraction
+
   for (const candidate of REST_CANDIDATES) {
     if (candidate > remaining) continue
+    // Mid-beat: rest must not exceed distance to next beat boundary
+    if (!onBeat && candidate > maxForPosition + 0.001) continue
     // A rest smaller than 4 beats must not cross beat 3
     if (candidate < 4 && beatPosition < 3 && (beatPosition + candidate) > 3) continue
     return candidate

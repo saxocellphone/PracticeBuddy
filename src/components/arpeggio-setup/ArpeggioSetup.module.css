@@ -1,54 +1,3 @@
-/* Three-column layout — mirrors ScaleSetup */
-.threeColumnLayout {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-  width: 100%;
-}
-
-@media (min-width: 980px) {
-  .threeColumnLayout {
-    display: grid;
-    grid-template-columns: 240px 540px 1fr;
-    gap: var(--space-xl);
-    align-items: flex-start;
-  }
-
-  .leftColumn,
-  .middleColumn,
-  .previewColumn {
-    position: sticky;
-    top: 0;
-    max-height: 100vh;
-    overflow-y: auto;
-  }
-}
-
-.leftColumn {
-  display: flex;
-  flex-direction: column;
-}
-
-.middleColumn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-}
-
-.previewColumn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: var(--space-md);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  margin-bottom: var(--space-xl);
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
-}
-
 /* Section titles */
 .sectionTitle {
   font-size: 11px;
@@ -162,146 +111,14 @@
   margin-top: 12px;
 }
 
-/* Config sections */
-.configSection {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.configLabel {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-secondary);
-  margin-bottom: 0;
-}
-
-/* Chips */
-.chipRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.chip {
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 14px;
-  font-size: 13px;
-  font-weight: 500;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  transition: all 120ms ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chip:hover {
-  background: var(--color-surface-hover);
-}
-
+/* Accent color overrides */
 .chipActive {
   background: rgba(6, 182, 212, 1);
-  color: white;
   border-color: rgba(6, 182, 212, 1);
 }
 
-.chipActive:hover {
-  background: rgba(6, 182, 212, 1);
-  color: white;
-  border-color: rgba(6, 182, 212, 1);
-}
-
-.chipSmall {
-  height: 24px;
-  padding: 0 7px;
-  font-size: 12px;
-}
-
-/* Loop sub-controls (repeat counter / until key selector) */
-.loopSubControl {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding-top: 2px;
-}
-
-.loopSubLabel {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.loopSubHint {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-/* Stepper (+/- counter) */
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.stepperButton {
-  width: 28px;
-  height: 28px;
-  border-radius: 14px;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  font-size: 16px;
-  line-height: 1;
-  transition: background 120ms ease;
-  padding: 0;
-}
-
-.stepperButton:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-}
-
-.stepperButton:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.stepperValue {
-  min-width: 28px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Start button */
 .startButton {
-  align-self: stretch;
-  height: 48px;
-  border-radius: 8px;
   background: rgba(6, 182, 212, 1);
-  color: white;
-  font-size: 15px;
-  font-weight: 700;
-  border: none;
-  cursor: pointer;
-  transition: opacity 150ms ease;
-}
-
-.startButton:hover {
-  opacity: 0.88;
 }
 
 /* Preview */
@@ -310,27 +127,4 @@
   color: var(--color-text-muted);
 }
 
-/* Staff notation preview */
-.staffPreviewContainer {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
-}
-
-.staffPreviewLine {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: flex-start;
-}
-
-.staffPreviewMeasure {
-  flex-shrink: 0;
-  overflow: visible;
-}
-
-.previewUnavailable {
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
 

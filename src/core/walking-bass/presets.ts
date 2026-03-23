@@ -1,4 +1,5 @@
 import type { WalkingBassStep, WalkingBassSequence, ChordQuality } from './types.ts'
+import { PITCH_CLASSES } from '../music/pitchClass.ts'
 
 export type WalkingBassCategory = 'blues' | 'ii-v-i' | 'standards' | 'technique'
 
@@ -19,8 +20,6 @@ export interface WalkingBassPresetTemplate {
 }
 
 // ---- Helpers ----
-
-const PITCH_CLASSES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const
 
 function transposeNote(root: string, semitones: number): string {
   const idx = PITCH_CLASSES.indexOf(root as typeof PITCH_CLASSES[number])

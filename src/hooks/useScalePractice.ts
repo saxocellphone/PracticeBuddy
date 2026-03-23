@@ -74,9 +74,8 @@ function buildCombinedLoopNotes(sequence: ScaleSequence, noteDuration?: NoteDura
   return { notes: allNotes, chordSymbols, restIndices }
 }
 
-/** Build a combined label from all step labels (e.g., "D Dorian → G Mixolydian → C Major") */
-function getCombinedLabel(sequence: ScaleSequence, ignoreOctave: boolean): string {
-  return sequence.steps.map(s => getStepLabel(s, ignoreOctave)).join(' \u2192 ')
+function getCombinedLabel(sequence: ScaleSequence): string {
+  return sequence.name
 }
 
 /** Expand a scale sequence, clearing labels/chord symbols so they regenerate for transposed roots */
@@ -153,7 +152,7 @@ export function useScalePractice() {
       if (isCombinedMode(activeSequence)) {
         // Combined mode: build all step notes into one continuous session
         const { notes: allNotes, chordSymbols, restIndices } = buildCombinedLoopNotes(activeSequence, noteDuration, scaleStartPosition, range)
-        const label = getCombinedLabel(activeSequence, ignoreOctave)
+        const label = getCombinedLabel(activeSequence)
 
         startSession({
           scaleNotes: allNotes,
@@ -249,7 +248,7 @@ export function useScalePractice() {
 
       const result: ScaleRunResult = {
         step: sequence.steps[0],
-        label: getCombinedLabel(sequence, ioct),
+        label: getCombinedLabel(sequence),
         scaleNotes: allNotes,
         score: innerScore,
         completedAt: Date.now(),
@@ -281,7 +280,7 @@ export function useScalePractice() {
         completedLoops: nextLoops,
         results: newResults,
         currentScaleNotes: allNotes,
-        currentLabel: getCombinedLabel(sequence, ioct),
+        currentLabel: getCombinedLabel(sequence),
         currentChordSymbol: chordSymbols[0]?.symbol ?? null,
         chordSymbols,
         nextLabel: null,

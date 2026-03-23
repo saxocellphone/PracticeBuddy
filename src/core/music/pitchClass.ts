@@ -1,3 +1,8 @@
+/** The 12 chromatic pitch classes using flats (the standard display set). */
+export const PITCH_CLASSES = [
+  'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
+] as const
+
 /**
  * Compare pitch classes by semitone value, treating enharmonic
  * equivalents (e.g., C# and Db) as equal. This mirrors the Rust

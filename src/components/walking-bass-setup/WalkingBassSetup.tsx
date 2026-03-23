@@ -8,12 +8,12 @@ import type { WalkingBassSequence, WalkingBassStep, ApproachType } from '@core/w
 import { APPROACH_TYPE_LABELS, WALKING_BASS_PATTERNS } from '@core/walking-bass/index.ts'
 import { expandSequenceWithLoops } from '@core/music/sequenceExpander.ts'
 import type { ClefType } from '@core/instruments.ts'
+import { RootNoteSelector } from '@components/common/RootNoteSelector.tsx'
+import { LoopSection } from '@components/common/LoopSection.tsx'
 import { WalkingBassStaffPreview } from './WalkingBassStaffPreview.tsx'
-import styles from './WalkingBassSetup.module.css'
-
-const PITCH_CLASSES = [
-  'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
-] as const
+import sharedStyles from '../common/SetupLayout.module.css'
+import localStyles from './WalkingBassSetup.module.css'
+const styles = { ...sharedStyles, ...localStyles }
 
 const CATEGORY_ORDER: WalkingBassCategory[] = [
   'blues',
@@ -21,14 +21,6 @@ const CATEGORY_ORDER: WalkingBassCategory[] = [
   'standards',
   'technique',
 ]
-
-const LOOP_OPTIONS = [
-  { label: 'No shift', value: 0 },
-  { label: 'Circle of 4ths', value: 5 },
-  { label: 'Circle of 5ths', value: 7 },
-  { label: 'Chromatic', value: 1 },
-  { label: 'Whole tone', value: 2 },
-] as const
 
 const APPROACH_TYPES: ApproachType[] = [
   'chromatic-below',
@@ -43,6 +35,7 @@ interface WalkingBassSetupProps {
   defaultOctave?: number
   clef?: ClefType
   range?: { minMidi: number; maxMidi: number }
+  startButtonLabel?: string
 }
 
 const WALKING_BASS_SETUP_KEY = 'practicebuddy:walking-bass:setup'
@@ -67,7 +60,7 @@ function loadSetup(): Partial<WalkingBassSetupState> {
   }
 }
 
-export function WalkingBassSetup({ onStart, settingsSlot, defaultOctave, range }: WalkingBassSetupProps) {
+export function WalkingBassSetup({ onStart, settingsSlot, defaultOctave, clef, range, startButtonLabel }: WalkingBassSetupProps) {
   const [saved] = useState(loadSetup)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(saved.selectedPresetId ?? null)
   const [rootKey, setRootKey] = useState(saved.rootKey ?? 'F')
@@ -188,20 +181,7 @@ export function WalkingBassSetup({ onStart, settingsSlot, defaultOctave, range }
             </div>
 
             {/* Root Note */}
-            <div className={styles.configSection}>
-              <span className={styles.configLabel}>Root Note</span>
-              <div className={styles.chipRow}>
-                {PITCH_CLASSES.map((pc) => (
-                  <button
-                    key={pc}
-                    className={`${styles.chip} ${rootKey === pc ? styles.chipActive : ''}`}
-                    onClick={() => setRootKey(pc)}
-                  >
-                    {pc}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <RootNoteSelector value={rootKey} onChange={setRootKey} classes={styles} />
 
             {/* Pattern */}
             <div className={styles.configSection}>
@@ -243,69 +223,23 @@ export function WalkingBassSetup({ onStart, settingsSlot, defaultOctave, range }
             </div>
 
             {/* Loop */}
-            <div className={styles.configSection}>
-              <span className={styles.configLabel}>Loop</span>
-              <div className={styles.chipRow}>
-                {LOOP_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={`${styles.chip} ${shiftSemitones === opt.value ? styles.chipActive : ''}`}
-                    onClick={() => {
-                      setShiftSemitones(opt.value)
-                      if (opt.value > 0) setShiftUntilKey(rootKey)
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              {shiftSemitones === 0 ? (
-                <div className={styles.loopSubControl}>
-                  <span className={styles.loopSubLabel}>Repeat</span>
-                  <div className={styles.stepper}>
-                    <button
-                      className={styles.stepperButton}
-                      onClick={() => setLoopCount((c) => Math.max(1, c - 1))}
-                      disabled={loopCount <= 1}
-                    >
-                      &minus;
-                    </button>
-                    <span className={styles.stepperValue}>{loopCount}</span>
-                    <button
-                      className={styles.stepperButton}
-                      onClick={() => setLoopCount((c) => Math.min(12, c + 1))}
-                      disabled={loopCount >= 12}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <span className={styles.loopSubHint}>
-                    {loopCount === 1 ? 'time' : 'times'}
-                  </span>
-                </div>
-              ) : (
-                <div className={styles.loopSubControl}>
-                  <span className={styles.loopSubLabel}>Until</span>
-                  <div className={styles.chipRow}>
-                    {PITCH_CLASSES.map((pc) => (
-                      <button
-                        key={pc}
-                        className={`${styles.chip} ${styles.chipSmall} ${shiftUntilKey === pc ? styles.chipActive : ''}`}
-                        onClick={() => setShiftUntilKey(pc)}
-                      >
-                        {pc}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <LoopSection
+              shiftSemitones={shiftSemitones}
+              onShiftSemitonesChange={setShiftSemitones}
+              loopCount={loopCount}
+              onLoopCountChange={setLoopCount}
+              shiftUntilKey={shiftUntilKey}
+              onShiftUntilKeyChange={setShiftUntilKey}
+              rootKey={rootKey}
+              classes={styles}
+              untilVariant="chips"
+            />
 
             {/* Settings slot (metronome, advanced) */}
             {settingsSlot}
 
             <button className={styles.startButton} onClick={handleStart}>
-              Start Practice
+              {startButtonLabel ?? 'Start Practice'}
             </button>
           </div>
         </div>
@@ -321,6 +255,7 @@ export function WalkingBassSetup({ onStart, settingsSlot, defaultOctave, range }
           <WalkingBassStaffPreview
             sequence={previewSequence}
             range={range}
+            clef={clef}
           />
         </div>
       )}

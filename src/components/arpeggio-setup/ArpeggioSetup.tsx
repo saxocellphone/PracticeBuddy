@@ -10,26 +10,18 @@ import { isArpeggioPlayable } from '@core/music/arpeggioBuilder.ts'
 import type { ClefType } from '@core/instruments.ts'
 import type { NoteDuration, ScaleStartPosition } from '@core/rhythm/types.ts'
 import { NOTE_DURATIONS, NOTE_DURATION_LABELS } from '@core/rhythm/types.ts'
+import { RootNoteSelector } from '@components/common/RootNoteSelector.tsx'
+import { LoopSection } from '@components/common/LoopSection.tsx'
 import { ArpeggioStaffPreview } from './ArpeggioStaffPreview.tsx'
-import styles from './ArpeggioSetup.module.css'
-
-const PITCH_CLASSES = [
-  'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
-] as const
+import sharedStyles from '../common/SetupLayout.module.css'
+import localStyles from './ArpeggioSetup.module.css'
+const styles = { ...sharedStyles, ...localStyles }
 
 const CATEGORY_ORDER: (keyof typeof ARPEGGIO_PRESET_CATEGORIES)[] = [
   'triads',
   'seventh',
   'jazz',
 ]
-
-const LOOP_OPTIONS = [
-  { label: 'No shift', value: 0 },
-  { label: 'Circle of 4ths', value: 5 },
-  { label: 'Circle of 5ths', value: 7 },
-  { label: 'Chromatic', value: 1 },
-  { label: 'Whole tone', value: 2 },
-] as const
 
 const DIRECTION_OPTIONS: { label: string; value: ArpeggioDirection }[] = [
   { label: '\u2191 Up', value: 'ascending' },
@@ -51,6 +43,8 @@ interface ArpeggioSetupProps {
   range?: { minMidi: number; maxMidi: number }
   /** Where the next arpeggio starts relative to the previous one */
   scaleStartPosition?: ScaleStartPosition
+  /** Custom label for the start button */
+  startButtonLabel?: string
 }
 
 const ARPEGGIO_SETUP_KEY = 'practicebuddy:arpeggios:setup'
@@ -75,7 +69,7 @@ function loadArpeggioSetup(): Partial<ArpeggioSetupState> {
   }
 }
 
-export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurationChange, defaultOctave, range, clef, scaleStartPosition }: ArpeggioSetupProps) {
+export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurationChange, defaultOctave, range, clef, scaleStartPosition, startButtonLabel }: ArpeggioSetupProps) {
   const [saved] = useState(loadArpeggioSetup)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(saved.selectedPresetId ?? null)
   const [rootKey, setRootKey] = useState(saved.rootKey ?? 'C')
@@ -210,20 +204,7 @@ export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurat
             </div>
 
             {/* Root Note */}
-            <div className={styles.configSection}>
-              <span className={styles.configLabel}>Root Note</span>
-              <div className={styles.chipRow}>
-                {PITCH_CLASSES.map((pc) => (
-                  <button
-                    key={pc}
-                    className={`${styles.chip} ${rootKey === pc ? styles.chipActive : ''}`}
-                    onClick={() => setRootKey(pc)}
-                  >
-                    {pc}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <RootNoteSelector value={rootKey} onChange={setRootKey} classes={styles} />
 
             {/* Note Duration */}
             {noteDuration && onNoteDurationChange && (
@@ -276,69 +257,22 @@ export function ArpeggioSetup({ onStart, settingsSlot, noteDuration, onNoteDurat
             </div>
 
             {/* Loop */}
-            <div className={styles.configSection}>
-              <span className={styles.configLabel}>Loop</span>
-              <div className={styles.chipRow}>
-                {LOOP_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={`${styles.chip} ${shiftSemitones === opt.value ? styles.chipActive : ''}`}
-                    onClick={() => {
-                      setShiftSemitones(opt.value)
-                      if (opt.value > 0) setShiftUntilKey(rootKey)
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              {shiftSemitones === 0 ? (
-                <div className={styles.loopSubControl}>
-                  <span className={styles.loopSubLabel}>Repeat</span>
-                  <div className={styles.stepper}>
-                    <button
-                      className={styles.stepperButton}
-                      onClick={() => setLoopCount((c) => Math.max(1, c - 1))}
-                      disabled={loopCount <= 1}
-                    >
-                      &minus;
-                    </button>
-                    <span className={styles.stepperValue}>{loopCount}</span>
-                    <button
-                      className={styles.stepperButton}
-                      onClick={() => setLoopCount((c) => Math.min(12, c + 1))}
-                      disabled={loopCount >= 12}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <span className={styles.loopSubHint}>
-                    {loopCount === 1 ? 'time' : 'times'}
-                  </span>
-                </div>
-              ) : (
-                <div className={styles.loopSubControl}>
-                  <span className={styles.loopSubLabel}>Until</span>
-                  <div className={styles.chipRow}>
-                    {PITCH_CLASSES.map((pc) => (
-                      <button
-                        key={pc}
-                        className={`${styles.chip} ${styles.chipSmall} ${shiftUntilKey === pc ? styles.chipActive : ''}`}
-                        onClick={() => setShiftUntilKey(pc)}
-                      >
-                        {pc}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <LoopSection
+              shiftSemitones={shiftSemitones}
+              onShiftSemitonesChange={setShiftSemitones}
+              loopCount={loopCount}
+              onLoopCountChange={setLoopCount}
+              shiftUntilKey={shiftUntilKey}
+              onShiftUntilKeyChange={setShiftUntilKey}
+              rootKey={rootKey}
+              classes={styles}
+            />
 
             {/* Settings slot (metronome, advanced) */}
             {settingsSlot}
 
             <button className={styles.startButton} onClick={handleStart}>
-              Start Practice
+              {startButtonLabel ?? 'Start Practice'}
             </button>
           </div>
         </div>

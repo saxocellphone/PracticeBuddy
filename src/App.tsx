@@ -25,10 +25,14 @@ import type { PracticeMode, TimingMode } from "@components/home/HomePage.tsx";
 import { ScaleSetup } from "@components/scale-setup/ScaleSetup.tsx";
 import { ScaleBanner } from "@components/practice-view/ScaleBanner.tsx";
 import { ArpeggioSetup } from "@components/arpeggio-setup/ArpeggioSetup.tsx";
+import { ArpeggioStaffPreview } from "@components/arpeggio-setup/ArpeggioStaffPreview.tsx";
 import { ArpeggioPracticeView } from "@components/arpeggio-practice/ArpeggioPracticeView.tsx";
 import { ArpeggioResults } from "@components/arpeggio-results/ArpeggioResults.tsx";
 import { WalkingBassSetup } from "@components/walking-bass-setup/WalkingBassSetup.tsx";
+import { WalkingBassStaffPreview } from "@components/walking-bass-setup/WalkingBassStaffPreview.tsx";
 import { WalkingBassResults } from "@components/walking-bass-results/WalkingBassResults.tsx";
+import { SheetMusicView } from "@components/sheet-music/SheetMusicView.tsx";
+import { StaffPreview } from "@components/scale-setup/StaffPreview.tsx";
 import type { ScaleSequence, ScaleStep } from "@core/scales/types.ts";
 import type { ArpeggioSequence, ArpeggioStep } from "@core/arpeggio/types.ts";
 import type {
@@ -188,7 +192,7 @@ function loadSettings(): PersistedSettings {
           ? parsed.ignoreOctave
           : DEFAULT_SETTINGS.ignoreOctave,
       timingMode:
-        parsed.timingMode === "follow" || parsed.timingMode === "rhythm"
+        parsed.timingMode === "follow" || parsed.timingMode === "rhythm" || parsed.timingMode === "sheet-music"
           ? parsed.timingMode
           : DEFAULT_SETTINGS.timingMode,
       activeMode: ["scales", "arpeggios", "walking-bass"].includes(
@@ -534,6 +538,33 @@ function MainApp() {
   const scaleSequenceRef = useRef<ScaleSequence | null>(null);
   const arpeggioSequenceRef = useRef<ArpeggioSequence | null>(null);
   const walkingBassSequenceRef = useRef<WalkingBassSequence | null>(null);
+  const [sheetMusicSequence, setSheetMusicSequence] = useState<ScaleSequence | null>(null);
+  const [sheetMusicWalkingBass, setSheetMusicWalkingBass] = useState<WalkingBassSequence | null>(null);
+  const [sheetMusicArpeggio, setSheetMusicArpeggio] = useState<ArpeggioSequence | null>(null);
+
+  const handleEnterSheetMusic = useCallback((sequence: ScaleSequence) => {
+    const expanded = expandScaleSeq(sequence)
+    setSheetMusicSequence(expanded)
+    setSheetMusicWalkingBass(null)
+    setSheetMusicArpeggio(null)
+    setView('practicing')
+  }, [])
+
+  const handleEnterArpeggioSheetMusic = useCallback((sequence: ArpeggioSequence) => {
+    const expanded = expandArpSeq(sequence)
+    setSheetMusicArpeggio(expanded)
+    setSheetMusicSequence(null)
+    setSheetMusicWalkingBass(null)
+    setView('practicing')
+  }, [])
+
+  const handleEnterWalkingBassSheetMusic = useCallback((sequence: WalkingBassSequence) => {
+    const expanded = expandWalkingBassSeq(sequence)
+    setSheetMusicWalkingBass(expanded)
+    setSheetMusicSequence(null)
+    setSheetMusicArpeggio(null)
+    setView('practicing')
+  }, [])
 
   const handleStartPractice = useCallback(
     async (sequence: ScaleSequence) => {
@@ -929,6 +960,7 @@ function MainApp() {
 
   // Build the settings slot for the setup config panel
   const isRhythmMode = timingMode === "rhythm";
+  const isSheetMusicMode = timingMode === "sheet-music";
   const setupSettingsSlot = (
     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
       {isRhythmMode ? (
@@ -1124,12 +1156,14 @@ function MainApp() {
       instruments={INSTRUMENTS}
       instrumentId={instrumentId}
       onInstrumentChange={setInstrumentId}
+      timingMode={timingMode}
+      onTimingModeChange={setTimingMode}
+      showTimingToggle={view === "home" || view === "setup"}
     >
       {view === "home" && (
         <HomePage
           onSelectMode={handleSelectMode}
           initialTimingMode={timingMode}
-          onTimingModeChange={setTimingMode}
         />
       )}
 
@@ -1144,9 +1178,9 @@ function MainApp() {
           <ScaleSetup
             availableScales={scale.availableScales}
             onStartSequence={
-              isRhythmMode ? handleStartRhythmPractice : handleStartPractice
+              isSheetMusicMode ? handleEnterSheetMusic : isRhythmMode ? handleStartRhythmPractice : handleStartPractice
             }
-            settingsSlot={setupSettingsSlot}
+            settingsSlot={isSheetMusicMode ? null : setupSettingsSlot}
             hideSkipTransition={isRhythmMode}
             noteDuration={noteDuration}
             onNoteDurationChange={setNoteDuration}
@@ -1155,6 +1189,7 @@ function MainApp() {
             defaultOctave={instrument.defaultOctave}
             clef={instrument.clef}
             range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
+            startButtonLabel={isSheetMusicMode ? 'Enter Fullscreen' : undefined}
           />
         </div>
       )}
@@ -1168,8 +1203,8 @@ function MainApp() {
           }}
         >
           <ArpeggioSetup
-            onStart={handleStartArpeggioPractice}
-            settingsSlot={setupSettingsSlot}
+            onStart={isSheetMusicMode ? handleEnterArpeggioSheetMusic : handleStartArpeggioPractice}
+            settingsSlot={isSheetMusicMode ? null : setupSettingsSlot}
             noteDuration={noteDuration}
             onNoteDurationChange={setNoteDuration}
             bpm={metronome.bpm}
@@ -1177,9 +1212,11 @@ function MainApp() {
             clef={instrument.clef}
             range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
             scaleStartPosition={scaleStartPosition}
+            startButtonLabel={isSheetMusicMode ? 'Enter Fullscreen' : undefined}
           />
         </div>
       )}
+
 
       {view === "setup" && activeMode === "walking-bass" && (
         <div
@@ -1190,8 +1227,9 @@ function MainApp() {
           }}
         >
           <WalkingBassSetup
-            onStart={handleStartWalkingBassPractice}
-            settingsSlot={setupSettingsSlot}
+            onStart={isSheetMusicMode ? handleEnterWalkingBassSheetMusic : handleStartWalkingBassPractice}
+            settingsSlot={isSheetMusicMode ? null : setupSettingsSlot}
+            startButtonLabel={isSheetMusicMode ? 'Enter Fullscreen' : undefined}
             defaultOctave={instrument.defaultOctave}
             clef={instrument.clef}
             range={{
@@ -1200,6 +1238,59 @@ function MainApp() {
             }}
           />
         </div>
+      )}
+
+      {/* Sheet Music fullscreen view — scales/arpeggios */}
+      {view === 'practicing' && timingMode === 'sheet-music' && sheetMusicSequence && (
+        <SheetMusicView
+          title={sheetMusicSequence.name}
+          subtitle={`${sheetMusicSequence.steps.length} ${sheetMusicSequence.steps.length === 1 ? 'scale' : 'scales'}`}
+          onBack={handleBackToSetup}
+        >
+          <StaffPreview
+            sequence={sheetMusicSequence}
+            direction={sheetMusicSequence.direction}
+            numOctaves={sheetMusicSequence.numOctaves ?? 1}
+            noteDuration={noteDuration}
+            scaleStartPosition={scaleStartPosition}
+            clef={instrument.clef}
+            range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
+          />
+        </SheetMusicView>
+      )}
+
+      {/* Sheet Music fullscreen view — arpeggios */}
+      {view === 'practicing' && timingMode === 'sheet-music' && sheetMusicArpeggio && (
+        <SheetMusicView
+          title={sheetMusicArpeggio.name}
+          subtitle={`${sheetMusicArpeggio.steps.length} ${sheetMusicArpeggio.steps.length === 1 ? 'arpeggio' : 'arpeggios'}`}
+          onBack={handleBackToSetup}
+        >
+          <ArpeggioStaffPreview
+            sequence={sheetMusicArpeggio}
+            direction={sheetMusicArpeggio.direction}
+            numOctaves={sheetMusicArpeggio.numOctaves}
+            noteDuration={noteDuration}
+            clef={instrument.clef}
+            range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
+            scaleStartPosition={scaleStartPosition}
+          />
+        </SheetMusicView>
+      )}
+
+      {/* Sheet Music fullscreen view — walking bass */}
+      {view === 'practicing' && timingMode === 'sheet-music' && sheetMusicWalkingBass && (
+        <SheetMusicView
+          title={sheetMusicWalkingBass.name}
+          subtitle={`${sheetMusicWalkingBass.steps.length} ${sheetMusicWalkingBass.steps.length === 1 ? 'measure' : 'measures'}`}
+          onBack={handleBackToSetup}
+        >
+          <WalkingBassStaffPreview
+            sequence={sheetMusicWalkingBass}
+            range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
+            clef={instrument.clef}
+          />
+        </SheetMusicView>
       )}
 
       {/* Practicing: scales follow mode */}

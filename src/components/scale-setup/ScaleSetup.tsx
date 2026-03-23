@@ -12,23 +12,16 @@ import type { ClefType } from '@core/instruments.ts'
 import type { ScaleInfo, ScaleDirection } from '@core/wasm/types.ts'
 import { NOTE_DURATIONS, NOTE_DURATION_LABELS } from '@core/rhythm/types.ts'
 import type { NoteDuration, ScaleStartPosition } from '@core/rhythm/types.ts'
+import { PITCH_CLASSES } from '@core/music/pitchClass.ts'
+import { RootNoteSelector } from '@components/common/RootNoteSelector.tsx'
+import { LoopSection } from '@components/common/LoopSection.tsx'
 import { SequenceBuilder } from './SequenceBuilder.tsx'
 import { StaffPreview } from './StaffPreview.tsx'
-import styles from './ScaleSetup.module.css'
-
-const PITCH_CLASSES = [
-  'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B',
-] as const
+import sharedStyles from '../common/SetupLayout.module.css'
+import localStyles from './ScaleSetup.module.css'
+const styles = { ...sharedStyles, ...localStyles }
 
 const CATEGORY_ORDER: (keyof typeof PRESET_CATEGORIES)[] = ['basic', 'jazz', 'theory', 'technique']
-
-const LOOP_OPTIONS = [
-  { label: 'No shift', value: 0 },
-  { label: 'Circle of 4ths', value: 5 },
-  { label: 'Circle of 5ths', value: 7 },
-  { label: 'Chromatic', value: 1 },
-  { label: 'Whole tone', value: 2 },
-] as const
 
 interface ScaleSetupProps {
   availableScales: ScaleInfo[]
@@ -51,6 +44,8 @@ interface ScaleSetupProps {
   clef?: ClefType
   /** MIDI range for the instrument */
   range?: { minMidi: number; maxMidi: number }
+  /** Custom label for the start button (defaults to "Start Practice") */
+  startButtonLabel?: string
 }
 
 const SCALES_SETUP_KEY = 'practicebuddy:scales:setup'
@@ -76,7 +71,7 @@ function loadScalesSetup(): Partial<ScalesSetupState> {
   }
 }
 
-export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, noteDuration, onNoteDurationChange, scaleStartPosition, defaultOctave, clef, range }: ScaleSetupProps) {
+export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, noteDuration, onNoteDurationChange, scaleStartPosition, defaultOctave, clef, range, startButtonLabel }: ScaleSetupProps) {
   const [saved] = useState(loadScalesSetup)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(saved.selectedPresetId ?? null)
   const [presetKey, setPresetKey] = useState(saved.presetKey ?? 'C')
@@ -343,20 +338,7 @@ export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, not
             </div>
 
             {/* Root Note */}
-            <div className={styles.configSection}>
-              <span className={styles.configLabel}>Root Note</span>
-              <div className={styles.chipRow}>
-                {PITCH_CLASSES.map((pc) => (
-                  <button
-                    key={pc}
-                    className={`${styles.chip} ${presetKey === pc ? styles.chipActive : ''}`}
-                    onClick={() => setPresetKey(pc)}
-                  >
-                    {pc}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <RootNoteSelector value={presetKey} onChange={setPresetKey} classes={styles} twoRows />
 
             {/* Note Duration */}
             {noteDuration && onNoteDurationChange && (
@@ -457,63 +439,17 @@ export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, not
             </div>
 
             {/* Loop */}
-            <div className={styles.configSection}>
-              <span className={styles.configLabel}>Loop</span>
-              <div className={styles.chipRow}>
-                {LOOP_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={`${styles.chip} ${shiftSemitones === opt.value ? styles.chipActive : ''}`}
-                    onClick={() => {
-                      setShiftSemitones(opt.value)
-                      if (opt.value > 0) setShiftUntilKey(presetKey)
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              {shiftSemitones === 0 ? (
-                <div className={styles.loopSubControl}>
-                  <span className={styles.loopSubLabel}>Repeat</span>
-                  <div className={styles.stepper}>
-                    <button
-                      className={styles.stepperButton}
-                      onClick={() => setLoopCount((c) => Math.max(1, c - 1))}
-                      disabled={loopCount <= 1}
-                    >
-                      &minus;
-                    </button>
-                    <span className={styles.stepperValue}>{loopCount}</span>
-                    <button
-                      className={styles.stepperButton}
-                      onClick={() => setLoopCount((c) => Math.min(12, c + 1))}
-                      disabled={loopCount >= 12}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <span className={styles.loopSubHint}>
-                    {loopCount === 1 ? 'time' : 'times'}
-                  </span>
-                </div>
-              ) : (
-                <div className={styles.loopSubControl}>
-                  <span className={styles.loopSubLabel}>Until</span>
-                  <div className={styles.chipRow}>
-                    {PITCH_CLASSES.map((pc) => (
-                      <button
-                        key={pc}
-                        className={`${styles.chip} ${styles.chipSmall} ${shiftUntilKey === pc ? styles.chipActive : ''}`}
-                        onClick={() => setShiftUntilKey(pc)}
-                      >
-                        {pc}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <LoopSection
+              shiftSemitones={shiftSemitones}
+              onShiftSemitonesChange={setShiftSemitones}
+              loopCount={loopCount}
+              onLoopCountChange={setLoopCount}
+              shiftUntilKey={shiftUntilKey}
+              onShiftUntilKeyChange={setShiftUntilKey}
+              rootKey={presetKey}
+              classes={styles}
+              twoRows
+            />
 
             {/* Metronome / advanced settings slot */}
             {settingsSlot}
@@ -522,7 +458,7 @@ export function ScaleSetup({ availableScales, onStartSequence, settingsSlot, not
               className={styles.startButton}
               onClick={handleStartPreset}
             >
-              Start Practice
+              {startButtonLabel ?? 'Start Practice'}
             </button>
           </div>
         )}
