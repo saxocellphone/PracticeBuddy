@@ -13,26 +13,26 @@ import { getInstrument, INSTRUMENTS } from "@core/instruments.ts";
 import { sensitivityToThresholds } from "@core/audio/sensitivity.ts";
 import { AppShell } from "@components/layout/AppShell.tsx";
 import { MetronomeControls } from "@components/metronome/MetronomeControls.tsx";
-import { PracticeView } from "@components/practice-view/PracticeView.tsx";
-import { ScaleResults } from "@components/session-results/ScaleResults.tsx";
-import { RhythmPracticeView } from "@components/rhythm-practice/RhythmPracticeView.tsx";
-import { RhythmResults } from "@components/rhythm-results/RhythmResults.tsx";
+import { PracticeView } from "@components/practice/PracticeView.tsx";
+import { ScaleResults } from "@components/results/ScaleResults.tsx";
+import { RhythmPracticeView } from "@components/practice/RhythmPracticeView.tsx";
+import { RhythmResults } from "@components/results/RhythmResults.tsx";
 import { PitchLeniency } from "@components/common/PitchLeniency.tsx";
 import { AdvancedSettings } from "@components/common/AdvancedSettings.tsx";
 import { MicSelector } from "@components/common/MicSelector.tsx";
 import { HomePage } from "@components/home/HomePage.tsx";
 import type { PracticeMode, TimingMode } from "@components/home/HomePage.tsx";
-import { ScaleSetup } from "@components/scale-setup/ScaleSetup.tsx";
-import { ScaleBanner } from "@components/practice-view/ScaleBanner.tsx";
-import { ArpeggioSetup } from "@components/arpeggio-setup/ArpeggioSetup.tsx";
-import { ArpeggioStaffPreview } from "@components/arpeggio-setup/ArpeggioStaffPreview.tsx";
-import { ArpeggioPracticeView } from "@components/arpeggio-practice/ArpeggioPracticeView.tsx";
-import { ArpeggioResults } from "@components/arpeggio-results/ArpeggioResults.tsx";
-import { WalkingBassSetup } from "@components/walking-bass-setup/WalkingBassSetup.tsx";
-import { WalkingBassStaffPreview } from "@components/walking-bass-setup/WalkingBassStaffPreview.tsx";
-import { WalkingBassResults } from "@components/walking-bass-results/WalkingBassResults.tsx";
-import { SheetMusicView } from "@components/sheet-music/SheetMusicView.tsx";
-import { StaffPreview } from "@components/scale-setup/StaffPreview.tsx";
+import { ScaleSetup } from "@components/setup/ScaleSetup.tsx";
+import { ScaleBanner } from "@components/practice/ScaleBanner.tsx";
+import { ArpeggioSetup } from "@components/setup/ArpeggioSetup.tsx";
+import { ArpeggioStaffPreview } from "@components/setup/ArpeggioStaffPreview.tsx";
+import { ArpeggioPracticeView } from "@components/practice/ArpeggioPracticeView.tsx";
+import { ArpeggioResults } from "@components/results/ArpeggioResults.tsx";
+import { WalkingBassSetup } from "@components/setup/WalkingBassSetup.tsx";
+import { WalkingBassStaffPreview } from "@components/setup/WalkingBassStaffPreview.tsx";
+import { WalkingBassResults } from "@components/results/WalkingBassResults.tsx";
+import { SheetMusicView } from "@components/common/SheetMusicView.tsx";
+import { StaffPreview } from "@components/setup/StaffPreview.tsx";
 import type { ScaleSequence, ScaleStep } from "@core/scales/types.ts";
 import type { ArpeggioSequence, ArpeggioStep } from "@core/arpeggio/types.ts";
 import type {
@@ -958,6 +958,14 @@ function MainApp() {
     audioInitialize,
   ]);
 
+  // Accent color per practice mode
+  const modeAccentColor: Record<PracticeMode, string> = {
+    scales: 'rgb(99, 102, 241)',
+    arpeggios: 'rgb(6, 182, 212)',
+    'walking-bass': 'rgb(245, 158, 11)',
+  }
+  const accentColor = modeAccentColor[activeMode]
+
   // Build the settings slot for the setup config panel
   const isRhythmMode = timingMode === "rhythm";
   const isSheetMusicMode = timingMode === "sheet-music";
@@ -973,6 +981,7 @@ function MainApp() {
             beatsPerMeasure={metronome.beatsPerMeasure}
             onBpmChange={metronome.setBpm}
             onToggle={handleMetronomeToggle}
+            accentColor={accentColor}
           />
         </>
       ) : (
@@ -1015,6 +1024,7 @@ function MainApp() {
               beatsPerMeasure={metronome.beatsPerMeasure}
               onBpmChange={metronome.setBpm}
               onToggle={handleMetronomeToggle}
+              accentColor={accentColor}
             />
           )}
         </>
@@ -1327,6 +1337,7 @@ function MainApp() {
                   else metronomeStart();
                 }}
                 compact
+                accentColor={accentColor}
               />
             </div>
             <div
@@ -1414,6 +1425,7 @@ function MainApp() {
                   else metronomeStart();
                 }}
                 compact
+                accentColor={accentColor}
               />
             </div>
             <div

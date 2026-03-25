@@ -214,7 +214,7 @@ describe('computeLiveFeedback', () => {
 
   it('returns null when previous feedback already shows correct pitch for this note', () => {
     const pitch: DetectedPitch = { frequency: 440, clarity: 0.9 }
-    const previousFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult }
+    const previousFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, A4, 30, TEST_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
@@ -227,7 +227,7 @@ describe('computeLiveFeedback', () => {
 
   it('upgrades from wrong to correct when a matching detection arrives', () => {
     const pitch: DetectedPitch = { frequency: 440, clarity: 0.9 }
-    const previousFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult }
+    const previousFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, A4, 100, TEST_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
@@ -242,7 +242,7 @@ describe('computeLiveFeedback', () => {
 
   it('returns null when previous and new detection are both wrong for the same note', () => {
     const pitch: DetectedPitch = { frequency: 330, clarity: 0.9 } // E4, wrong note
-    const previousFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult }
+    const previousFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, A4, 80, TEST_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
@@ -255,7 +255,7 @@ describe('computeLiveFeedback', () => {
 
   it('returns feedback when transitioning to a new note index', () => {
     const pitch: DetectedPitch = { frequency: 330, clarity: 0.9 } // E4
-    const previousFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult }
+    const previousFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, E4, 20, TEST_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,

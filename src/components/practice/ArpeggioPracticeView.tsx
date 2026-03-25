@@ -3,7 +3,7 @@ import type { SessionState, DetectedPitch, FrequencyToNoteResult, SessionScore }
 import type { ArpeggioSessionState } from '@core/arpeggio/types.ts'
 import type { ClefType } from '@core/instruments.ts'
 import { ScaleStaff } from '@core/notation'
-import { PracticeLayout } from '@components/practice-view/PracticeLayout.tsx'
+import { PracticeLayout } from './PracticeLayout.tsx'
 import styles from './ArpeggioPracticeView.module.css'
 
 interface ArpeggioPracticeViewProps {

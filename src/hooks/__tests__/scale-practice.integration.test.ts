@@ -29,20 +29,22 @@ let activeMockSession: MockSession | null = null
 // Mock session class — replaces TypedPracticeSession
 // ---------------------------------------------------------------------------
 
+interface MockSessionConfig {
+  scaleNotes: Note[]
+  minHoldDetections: number
+  ignoreOctave: boolean
+}
+
 interface MockSession {
-  start: ReturnType<typeof vi.fn>
-  processFrame: ReturnType<typeof vi.fn>
-  skipNote: ReturnType<typeof vi.fn>
-  getState: ReturnType<typeof vi.fn>
-  getScore: ReturnType<typeof vi.fn>
-  reset: ReturnType<typeof vi.fn>
-  free: ReturnType<typeof vi.fn>
+  start: ReturnType<typeof vi.fn<(config: MockSessionConfig) => SessionState>>
+  processFrame: ReturnType<typeof vi.fn<(freq: number, clarity: number) => SessionState>>
+  skipNote: ReturnType<typeof vi.fn<() => SessionState>>
+  getState: ReturnType<typeof vi.fn<() => SessionState>>
+  getScore: ReturnType<typeof vi.fn<() => SessionScore>>
+  reset: ReturnType<typeof vi.fn<() => void>>
+  free: ReturnType<typeof vi.fn<() => void>>
   /** Internal state for driving the mock through note progression */
-  _config: {
-    scaleNotes: Note[]
-    minHoldDetections: number
-    ignoreOctave: boolean
-  } | null
+  _config: MockSessionConfig | null
   _noteIndex: number
   _holdCount: number
   _phase: 'Idle' | 'Playing' | 'Complete'
@@ -59,84 +61,77 @@ function createMockSession(): MockSession {
     _correctCount: 0,
     _incorrectCount: 0,
 
-    start: vi.fn(function (this: MockSession, config): SessionState {
-      this._config = config
-      this._noteIndex = 0
-      this._holdCount = 0
-      this._phase = 'Playing'
-      this._correctCount = 0
-      this._incorrectCount = 0
-      return makeSessionState(this)
-    }),
-
-    processFrame: vi.fn(function (
-      this: MockSession,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _frequency: number,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _clarity: number,
-    ): SessionState {
-      if (this._phase !== 'Playing' || !this._config) return makeSessionState(this)
-
-      // Simulate: every call is a correct detection, increment hold count
-      this._holdCount += 1
-
-      if (this._holdCount >= this._config.minHoldDetections) {
-        // Note accepted
-        this._correctCount += 1
-        this._noteIndex += 1
-        this._holdCount = 0
-
-        if (this._noteIndex >= this._config.scaleNotes.length) {
-          this._phase = 'Complete'
-        }
-      }
-
-      return makeSessionState(this)
-    }),
-
-    skipNote: vi.fn(function (this: MockSession): SessionState {
-      if (this._phase !== 'Playing' || !this._config) return makeSessionState(this)
-
-      this._noteIndex += 1
-      this._holdCount = 0
-
-      if (this._noteIndex >= this._config.scaleNotes.length) {
-        this._phase = 'Complete'
-      }
-
-      return makeSessionState(this)
-    }),
-
-    getState: vi.fn(function (this: MockSession): SessionState {
-      return makeSessionState(this)
-    }),
-
-    getScore: vi.fn(function (this: MockSession): SessionScore {
-      const totalNotes = this._config?.scaleNotes.length ?? 0
-      const missedNotes = totalNotes - this._correctCount - this._incorrectCount
-      return {
-        totalNotes,
-        correctNotes: this._correctCount,
-        incorrectNotes: this._incorrectCount,
-        missedNotes: Math.max(0, missedNotes),
-        accuracyPercent:
-          totalNotes > 0 ? (this._correctCount / totalNotes) * 100 : 0,
-        averageCentsOffset: 5,
-        noteResults: [],
-      }
-    }),
-
+    start: vi.fn(),
+    processFrame: vi.fn(),
+    skipNote: vi.fn(),
+    getState: vi.fn(),
+    getScore: vi.fn(),
     reset: vi.fn(),
     free: vi.fn(),
   }
 
-  // Bind all methods to the session instance so `this` works in vi.fn wrappers
-  session.start = session.start.bind(session)
-  session.processFrame = session.processFrame.bind(session)
-  session.skipNote = session.skipNote.bind(session)
-  session.getState = session.getState.bind(session)
-  session.getScore = session.getScore.bind(session)
+  // Implement mock methods with access to session state via closure
+  session.start.mockImplementation((config: MockSessionConfig): SessionState => {
+    session._config = config
+    session._noteIndex = 0
+    session._holdCount = 0
+    session._phase = 'Playing'
+    session._correctCount = 0
+    session._incorrectCount = 0
+    return makeSessionState(session)
+  })
+
+  session.processFrame.mockImplementation((): SessionState => {
+    if (session._phase !== 'Playing' || !session._config) return makeSessionState(session)
+
+    // Simulate: every call is a correct detection, increment hold count
+    session._holdCount += 1
+
+    if (session._holdCount >= session._config.minHoldDetections) {
+      // Note accepted
+      session._correctCount += 1
+      session._noteIndex += 1
+      session._holdCount = 0
+
+      if (session._noteIndex >= session._config.scaleNotes.length) {
+        session._phase = 'Complete'
+      }
+    }
+
+    return makeSessionState(session)
+  })
+
+  session.skipNote.mockImplementation((): SessionState => {
+    if (session._phase !== 'Playing' || !session._config) return makeSessionState(session)
+
+    session._noteIndex += 1
+    session._holdCount = 0
+
+    if (session._noteIndex >= session._config.scaleNotes.length) {
+      session._phase = 'Complete'
+    }
+
+    return makeSessionState(session)
+  })
+
+  session.getState.mockImplementation((): SessionState => {
+    return makeSessionState(session)
+  })
+
+  session.getScore.mockImplementation((): SessionScore => {
+    const totalNotes = session._config?.scaleNotes.length ?? 0
+    const missedNotes = totalNotes - session._correctCount - session._incorrectCount
+    return {
+      totalNotes,
+      correctNotes: session._correctCount,
+      incorrectNotes: session._incorrectCount,
+      missedNotes: Math.max(0, missedNotes),
+      accuracyPercent:
+        totalNotes > 0 ? (session._correctCount / totalNotes) * 100 : 0,
+      averageCentsOffset: 5,
+      noteResults: [],
+    }
+  })
 
   activeMockSession = session
   return session
@@ -187,7 +182,7 @@ vi.mock('@core/wasm/session.ts', () => {
       constructor() {
         this.delegate = createMockSession()
       }
-      start(config: unknown) { return this.delegate.start(config) }
+      start(config: MockSessionConfig) { return this.delegate.start(config) }
       processFrame(freq: number, clarity: number) { return this.delegate.processFrame(freq, clarity) }
       skipNote() { return this.delegate.skipNote() }
       getState() { return this.delegate.getState() }

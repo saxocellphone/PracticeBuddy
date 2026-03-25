@@ -8,6 +8,7 @@ interface MetronomeControlsProps {
   onBpmChange: (bpm: number) => void
   onToggle: () => void
   compact?: boolean
+  accentColor?: string
 }
 
 export function MetronomeControls({
@@ -18,9 +19,12 @@ export function MetronomeControls({
   onBpmChange,
   onToggle,
   compact = false,
+  accentColor,
 }: MetronomeControlsProps) {
+  const colorStyle = accentColor ? { '--metronome-accent': accentColor } as React.CSSProperties : undefined
+
   return (
-    <div className={`${styles.container} ${compact ? styles.compact : ''}`}>
+    <div className={`${styles.container} ${compact ? styles.compact : ''}`} style={colorStyle}>
       <div className={styles.header}>
         <h3 className={styles.title}>Metronome</h3>
         <button

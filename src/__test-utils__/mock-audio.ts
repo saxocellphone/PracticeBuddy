@@ -5,7 +5,7 @@ import { vi } from 'vitest'
 // ---------------------------------------------------------------------------
 
 /** Minimal AudioParam mock with value tracking and automation stubs */
-export interface MockAudioParam extends Partial<AudioParam> {
+export interface MockAudioParam {
   value: number
   defaultValue: number
   setValueAtTime: ReturnType<typeof vi.fn>
@@ -28,7 +28,7 @@ function createMockAudioParam(defaultValue = 0): MockAudioParam {
 // ---------------------------------------------------------------------------
 
 /** Minimal AudioNode mock that tracks connect/disconnect calls */
-export interface MockAudioNode extends Partial<AudioNode> {
+export interface MockAudioNode {
   connect: ReturnType<typeof vi.fn>
   disconnect: ReturnType<typeof vi.fn>
 }
@@ -182,7 +182,7 @@ function createMockMediaStreamSource(): MockAudioNode {
  * - `close()` and `resume()` resolve immediately
  * - `destination` is a mock AudioNode
  */
-export interface MockAudioContext extends Partial<AudioContext> {
+export interface MockAudioContext {
   currentTime: number
   state: AudioContextState
   sampleRate: number
@@ -192,7 +192,7 @@ export interface MockAudioContext extends Partial<AudioContext> {
   createdOscillators: MockOscillatorNode[]
   /** The mock analyser returned by createAnalyser() */
   mockAnalyser: MockAnalyserNode
-  destination: MockAudioNode & Partial<AudioDestinationNode>
+  destination: MockAudioNode
   createOscillator(): MockOscillatorNode
   createGain(): MockGainNode
   createAnalyser(): MockAnalyserNode
@@ -206,7 +206,7 @@ export function createMockAudioContext(): MockAudioContext {
   let time = 0
   const createdOscillators: MockOscillatorNode[] = []
   const mockAnalyser = createMockAnalyserNode()
-  const destinationNode = createMockAudioNode() as MockAudioNode & Partial<AudioDestinationNode>
+  const destinationNode = createMockAudioNode()
 
   const ctx: MockAudioContext = {
     get currentTime() {

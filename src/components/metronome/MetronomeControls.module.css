@@ -29,7 +29,7 @@
 .toggleButton {
   padding: 6px 16px;
   border-radius: var(--radius-sm);
-  background: var(--color-accent);
+  background: var(--metronome-accent, var(--color-accent));
   color: white;
   font-size: 0.8rem;
   font-weight: 600;
@@ -37,7 +37,8 @@
 }
 
 .toggleButton:hover {
-  background: var(--color-accent-hover);
+  background: var(--metronome-accent, var(--color-accent));
+  opacity: 0.88;
 }
 
 .toggleActive {
@@ -63,6 +64,7 @@
 .bpmSlider {
   flex: 1;
   height: 4px;
+  accent-color: var(--metronome-accent, var(--color-accent));
 }
 
 .bpmValue {
@@ -94,6 +96,6 @@
 }
 
 .beatActive {
-  background: var(--color-beat-active);
-  box-shadow: 0 0 8px var(--color-beat-active);
+  background: var(--metronome-accent, var(--color-beat-active));
+  box-shadow: 0 0 8px var(--metronome-accent, var(--color-beat-active));
 }

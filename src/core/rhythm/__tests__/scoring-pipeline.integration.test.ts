@@ -351,7 +351,7 @@ describe('computeLiveFeedback', () => {
 
   it('scenario 20: already correct for this note returns null', () => {
     const pitch = makePitch(110)
-    const currentFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult }
+    const currentFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, A2, 30, TEST_TIMING_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
@@ -363,7 +363,7 @@ describe('computeLiveFeedback', () => {
 
   it('scenario 21: upgrade from wrong to correct returns updated feedback', () => {
     const pitch = makePitch(110) // A2 - correct
-    const currentFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult }
+    const currentFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, A2, 100, TEST_TIMING_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
@@ -377,7 +377,7 @@ describe('computeLiveFeedback', () => {
 
   it('scenario 22: same note still wrong returns null', () => {
     const pitch = makePitch(82.41) // E2 - wrong for A2
-    const currentFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult }
+    const currentFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, A2, 80, TEST_TIMING_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
@@ -389,7 +389,7 @@ describe('computeLiveFeedback', () => {
 
   it('scenario 23: new noteIndex returns feedback', () => {
     const pitch = makePitch(82.41) // E2
-    const currentFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult }
+    const currentFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
       pitch, E2, 20, TEST_TIMING_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,

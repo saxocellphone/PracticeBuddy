@@ -158,7 +158,7 @@ describe('createConfig', () => {
   })
 
   it('deep-merges color overrides without losing other colors', () => {
-    const config = createConfig({ colors: { note: '#ff0000' } })
+    const config = createConfig({ colors: { note: '#ff0000' } } as Parameters<typeof createConfig>[0])
     expect(config.colors.note).toBe('#ff0000')
     expect(config.colors.staffLine).toBe(DEFAULT_MEASURE_CONFIG.colors.staffLine)
   })

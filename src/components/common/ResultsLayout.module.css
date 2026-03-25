@@ -15,7 +15,7 @@
   gap: var(--space-xl);
 }
 
-.accuracyCircle {
+.scoreCircle {
   width: 140px;
   height: 140px;
   border-radius: var(--radius-full);
@@ -27,13 +27,13 @@
   gap: 2px;
 }
 
-.accuracyValue {
+.scoreValue {
   font-family: var(--font-mono);
   font-size: 2.5rem;
   font-weight: 800;
 }
 
-.accuracyLabel {
+.scoreLabel {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -67,6 +67,12 @@
   letter-spacing: 0.05em;
 }
 
+/* Expandable breakdown */
+.breakdown {
+  display: flex;
+  flex-direction: column;
+}
+
 .sectionTitle {
   font-size: 0.85rem;
   font-weight: 600;
@@ -74,11 +80,6 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: var(--space-sm);
-}
-
-.breakdown {
-  display: flex;
-  flex-direction: column;
 }
 
 .itemList {
@@ -126,7 +127,7 @@
   color: var(--color-text-primary);
 }
 
-.itemAccuracy {
+.itemScore {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 600;
@@ -147,6 +148,7 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* Note detail rows */
 .noteList {
   display: flex;
   flex-direction: column;
@@ -176,17 +178,38 @@
   background: rgba(107, 114, 128, 0.1);
 }
 
+.noteItem_great {
+  background: var(--color-correct-bg);
+}
+
+.noteItem_ok {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.noteItem_wrong {
+  background: var(--color-incorrect-bg);
+}
+
 .noteExpected {
   min-width: 36px;
   font-weight: 600;
 }
 
-.noteResult {
+.noteArrow {
+  color: var(--color-text-muted);
+}
+
+.noteDetected {
+  min-width: 36px;
+}
+
+.noteBadge {
   margin-left: auto;
   font-size: 0.7rem;
   color: var(--color-text-secondary);
 }
 
+/* Action buttons */
 .actions {
   display: flex;
   gap: var(--space-md);
@@ -196,7 +219,7 @@
   flex: 1;
   padding: var(--space-md);
   border-radius: var(--radius-md);
-  background: rgba(245, 158, 11, 1);
+  background: var(--color-accent);
   color: white;
   font-size: 1rem;
   font-weight: 600;
