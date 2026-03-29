@@ -21,7 +21,6 @@ import { getBeamGroups } from '../beam.ts'
 import { StaveNote } from './StaveNote.tsx'
 import { Rest } from './Rest.tsx'
 import { Beam } from './Beam.tsx'
-
 interface VoiceProps {
   notes: Array<{ note: Note; duration: NoteDuration }>
   config: StaffConfig
@@ -61,32 +60,40 @@ export function Voice({
   const filterId = useId()
   const glowFilterId = `voice-glow-${filterId.replace(/:/g, '')}`
 
-  // Compute note layouts using fixed spacing on the beat grid
+  // Compute cumulative beat position for each note (0-indexed)
+  const noteBeatPositions = useMemo(() => {
+    const positions: number[] = []
+    let beatPos = 0
+    for (const { duration } of notes) {
+      positions.push(beatPos)
+      beatPos += NOTE_DURATION_BEATS[duration]
+    }
+    return positions
+  }, [notes])
+
+  // Compute note layouts using cumulative beat positions on the beat grid
   const noteLayouts = useMemo((): NoteLayout[] => {
     if (notes.length === 0) return []
 
-    const durationBeats = NOTE_DURATION_BEATS[notes[0].duration]
-    const expectedNotesPerMeasure = Math.round(beatsPerMeasure / durationBeats)
-    const noteSpacing = availableWidth / expectedNotesPerMeasure
-
     return notes.map(({ note, duration }, index) => {
-      const x = startX + noteSpacing * (index + 0.5)
+      const beatPos = noteBeatPositions[index]
+      const durBeats = NOTE_DURATION_BEATS[duration]
+      // Center note within its starting beat's quadrant (cap at 1 beat for positioning)
+      const positionDur = Math.min(durBeats, 1)
+      const x = startX + ((beatPos + positionDur / 2) / beatsPerMeasure) * availableWidth
       const y = noteToStaffY(note, config)
       return { note, duration, x, y, index }
     })
-  }, [notes, startX, availableWidth, beatsPerMeasure, config])
+  }, [notes, noteBeatPositions, startX, availableWidth, beatsPerMeasure, config])
 
   // Compute rest layout for incomplete measures using proper rest-filling rules.
   // Key rule: never use a single rest that crosses beat 3, unless it's a whole rest.
   const restLayouts = useMemo((): RestLayout[] => {
     if (notes.length === 0) return []
 
-    const noteDurationBeats = NOTE_DURATION_BEATS[notes[0].duration]
-    const expectedCount = Math.round(beatsPerMeasure / noteDurationBeats)
-    if (notes.length >= expectedCount) return []
+    const beatsFilled = notes.reduce((sum, { duration }) => sum + NOTE_DURATION_BEATS[duration], 0)
+    if (beatsFilled >= beatsPerMeasure - 0.001) return []
 
-    const noteSpacing = availableWidth / expectedCount
-    const beatsFilled = notes.length * noteDurationBeats
     let remainingBeats = beatsPerMeasure - beatsFilled
     let beatPosition = beatsFilled + 1 // 1-indexed beat where rests start
 
@@ -111,8 +118,7 @@ export function Voice({
     while (remainingBeats > 0.001) {
       const restBeats = largestRestThatFits(remainingBeats, beatPosition)
       const centerBeat = beatPosition + restBeats / 2
-      const centerSlot = (centerBeat - 1) / noteDurationBeats
-      const x = startX + noteSpacing * centerSlot
+      const x = startX + ((centerBeat - 1) / beatsPerMeasure) * availableWidth
       rests.push({ x, durationBeats: restBeats })
       beatPosition += restBeats
       remainingBeats -= restBeats
@@ -185,15 +191,15 @@ export function Voice({
             runLength++
           }
 
-          // Compute total rest duration and render consolidated rest glyphs
-          const noteDurationBeats = NOTE_DURATION_BEATS[layout.duration]
-          const totalRestBeats = runLength * noteDurationBeats
-          const expectedCount = Math.round(beatsPerMeasure / noteDurationBeats)
-          const noteSpacing = availableWidth / expectedCount
+          // Compute total rest duration by summing actual note durations in the run
+          let totalRestBeats = 0
+          for (let ri = 0; ri < runLength; ri++) {
+            totalRestBeats += NOTE_DURATION_BEATS[notes[layout.index + ri].duration]
+          }
 
           // Use rest-filling logic: split into proper rest durations
           const REST_CANDIDATES = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.375, 0.25]
-          const beatPos = layout.index * noteDurationBeats + 1 // 1-indexed
+          const beatPos = noteBeatPositions[layout.index] + 1 // 1-indexed
           let remaining = totalRestBeats
           let currentBeatPos = beatPos
           const rests: { x: number; durationBeats: number }[] = []
@@ -213,8 +219,7 @@ export function Voice({
               break
             }
             const centerBeat = currentBeatPos + restBeats / 2
-            const centerSlot = (centerBeat - 1) / noteDurationBeats
-            const x = startX + noteSpacing * centerSlot
+            const x = startX + ((centerBeat - 1) / beatsPerMeasure) * availableWidth
             rests.push({ x, durationBeats: restBeats })
             currentBeatPos += restBeats
             remaining -= restBeats
@@ -268,6 +273,7 @@ export function Voice({
           color={noteColor}
         />
       ))}
+
     </g>
   )
 }

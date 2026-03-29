@@ -37,7 +37,7 @@ interface MockSessionConfig {
 
 interface MockSession {
   start: ReturnType<typeof vi.fn<(config: MockSessionConfig) => SessionState>>
-  processFrame: ReturnType<typeof vi.fn<(freq: number, clarity: number) => SessionState>>
+  processFrame: ReturnType<typeof vi.fn<(freq: number, clarity: number, rms: number) => SessionState>>
   skipNote: ReturnType<typeof vi.fn<() => SessionState>>
   getState: ReturnType<typeof vi.fn<() => SessionState>>
   getScore: ReturnType<typeof vi.fn<() => SessionScore>>
@@ -183,7 +183,7 @@ vi.mock('@core/wasm/session.ts', () => {
         this.delegate = createMockSession()
       }
       start(config: MockSessionConfig) { return this.delegate.start(config) }
-      processFrame(freq: number, clarity: number) { return this.delegate.processFrame(freq, clarity) }
+      processFrame(freq: number, clarity: number, rms: number) { return this.delegate.processFrame(freq, clarity, rms) }
       skipNote() { return this.delegate.skipNote() }
       getState() { return this.delegate.getState() }
       getScore() { return this.delegate.getScore() }

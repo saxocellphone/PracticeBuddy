@@ -17,14 +17,32 @@
   border-radius: var(--radius-md);
 }
 
+/* Detected note + pitch indicator wrapper */
+.pitchFeedback {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  max-width: 500px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.detectedNote {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  min-width: 3.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
 /* Pitch Indicator */
 .pitchIndicator {
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  max-width: 400px;
-  margin: 0 auto;
-  width: 100%;
+  flex: 1;
 }
 
 .pitchLabel {

@@ -67,6 +67,17 @@ const GRACE_FRAMES_AFTER_ADVANCE: u32 = 15;
 /// At ~60fps this is ~133ms.
 const SETTLE_FRAMES_AFTER_ATTACK: u32 = 8;
 
+/// RMS amplitude below this is considered silence (note has stopped).
+const SILENCE_RMS_THRESHOLD: f64 = 0.005;
+
+/// A new frame's RMS must exceed the running average by this factor
+/// to be considered a transient attack (new note onset).
+const TRANSIENT_RATIO: f64 = 2.5;
+
+/// Smoothing factor for exponential moving average of RMS.
+/// Lower = smoother (slower to adapt), higher = more responsive.
+const RMS_SMOOTH_ALPHA: f64 = 0.08;
+
 struct SessionInternal {
     config: SessionConfig,
     phase: SessionPhase,
@@ -81,6 +92,10 @@ struct SessionInternal {
     correct_count: usize,
     incorrect_count: usize,
     last_result: Option<String>,
+    /// Exponential moving average of RMS amplitude, used for transient detection.
+    rms_avg: f64,
+    /// Whether RMS dropped below the silence threshold since the last note advance.
+    silence_detected: bool,
 }
 
 #[wasm_bindgen(js_name = PracticeSession)]
@@ -119,6 +134,8 @@ impl WasmPracticeSession {
             correct_count: 0,
             incorrect_count: 0,
             last_result: None,
+            rms_avg: 0.0,
+            silence_detected: false,
         });
 
         self.get_state()
@@ -131,6 +148,7 @@ impl WasmPracticeSession {
         &mut self,
         detected_frequency: f64,
         detected_clarity: f64,
+        detected_rms: f64,
     ) -> Result<JsValue, JsError> {
         let session = self
             .inner
@@ -141,32 +159,62 @@ impl WasmPracticeSession {
             return self.get_state();
         }
 
+        // Always update the running RMS average (even during grace/waiting)
+        // so the baseline is accurate when we need it for transient detection.
+        session.rms_avg = RMS_SMOOTH_ALPHA * detected_rms
+            + (1.0 - RMS_SMOOTH_ALPHA) * session.rms_avg;
+
         // Grace period: unconditionally skip the first N frames after advancing
         if session.grace_frames_remaining > 0 {
             session.grace_frames_remaining -= 1;
+            // Track silence during grace period too
+            if detected_rms < SILENCE_RMS_THRESHOLD {
+                session.silence_detected = true;
+            }
             return self.get_state();
         }
 
-        // Attack detection: after grace period, keep skipping while the
-        // lingering previous note is still ringing. Only start validating
-        // once we see a pitch that differs from the last confirmed note
-        // (i.e. the player has plucked a new note).
+        // Attack detection: after grace period, wait for evidence of a new
+        // note onset before validating. Accepts a new note when EITHER:
+        //   (a) Silence gap: RMS dropped below threshold, then sound returned
+        //   (b) Transient spike: RMS jumped well above the running average
+        // Pitch-change from the previous confirmed note is still required as
+        // a secondary check to avoid re-triggering on the same sustained note.
         if session.waiting_for_attack {
+            // Track silence
+            if detected_rms < SILENCE_RMS_THRESHOLD {
+                session.silence_detected = true;
+                return self.get_state();
+            }
+
+            // Check for amplitude-based new attack evidence
+            let has_silence_gap = session.silence_detected;
+            let has_transient = session.rms_avg > 1e-6
+                && detected_rms > session.rms_avg * TRANSIENT_RATIO;
+            let has_amplitude_evidence = has_silence_gap || has_transient;
+
+            if !has_amplitude_evidence {
+                // No amplitude evidence of a new note — keep waiting
+                return self.get_state();
+            }
+
+            // Also verify pitch has changed from the last confirmed note
+            // (prevents re-triggering if the same note is struck again
+            // with a transient but the target has moved on)
             let detected_midi = crate::note::frequency_to_midi_internal(detected_frequency)
                 .round() as i32;
             if let Some(prev_midi) = session.last_confirmed_midi {
                 let still_same = if session.config.ignore_octave {
-                    // When ignoring octave, compare pitch class only
                     detected_midi.rem_euclid(12) == prev_midi.rem_euclid(12)
                 } else {
                     detected_midi == prev_midi
                 };
                 if still_same {
-                    // Still hearing the previous note — skip
                     return self.get_state();
                 }
             }
-            // New pitch detected — accept the attack and start settle window
+
+            // New attack confirmed — proceed to validation
             session.waiting_for_attack = false;
             session.settle_frames_remaining = SETTLE_FRAMES_AFTER_ATTACK;
         }
@@ -210,6 +258,7 @@ impl WasmPracticeSession {
                 // Start grace period + attack detection for the next note
                 session.grace_frames_remaining = GRACE_FRAMES_AFTER_ADVANCE;
                 session.waiting_for_attack = true;
+                session.silence_detected = false;
                 session.last_confirmed_midi = Some(confirmed_midi);
 
                 if session.current_note_index >= session.config.scale_notes.len() {
@@ -389,6 +438,8 @@ mod tests {
             correct_count: 0,
             incorrect_count: 0,
             last_result: None,
+            rms_avg: 0.0,
+            silence_detected: false,
         });
 
         let inner = session.inner.as_ref().unwrap();

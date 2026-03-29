@@ -42,7 +42,7 @@ const B4 = makeNote('B4', 'B', 4, 71, 494)
 
 function makeSample(frequency: number, offsetMs: number, clarity = 0.9): PitchSample {
   return {
-    pitch: { frequency, clarity },
+    pitch: { frequency, clarity, rms: 0.1 },
     offsetMs,
   }
 }
@@ -199,7 +199,7 @@ describe('evaluateNote', () => {
 
 describe('computeLiveFeedback', () => {
   it('returns feedback on first detection (no previous feedback)', () => {
-    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9 }
+    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9, rms: 0.1 }
     const result = computeLiveFeedback(
       pitch, A4, 30, TEST_WINDOWS, DEFAULT_CENTS_TOLERANCE, IGNORE_OCTAVE,
       null, // no previous feedback
@@ -213,7 +213,7 @@ describe('computeLiveFeedback', () => {
   })
 
   it('returns null when previous feedback already shows correct pitch for this note', () => {
-    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9 }
+    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9, rms: 0.1 }
     const previousFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
@@ -226,7 +226,7 @@ describe('computeLiveFeedback', () => {
   })
 
   it('upgrades from wrong to correct when a matching detection arrives', () => {
-    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9 }
+    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9, rms: 0.1 }
     const previousFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
@@ -241,7 +241,7 @@ describe('computeLiveFeedback', () => {
   })
 
   it('returns null when previous and new detection are both wrong for the same note', () => {
-    const pitch: DetectedPitch = { frequency: 330, clarity: 0.9 } // E4, wrong note
+    const pitch: DetectedPitch = { frequency: 330, clarity: 0.9, rms: 0.1 } // E4, wrong note
     const previousFeedback = { noteIndex: 0, pitchCorrect: false, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
@@ -254,7 +254,7 @@ describe('computeLiveFeedback', () => {
   })
 
   it('returns feedback when transitioning to a new note index', () => {
-    const pitch: DetectedPitch = { frequency: 330, clarity: 0.9 } // E4
+    const pitch: DetectedPitch = { frequency: 330, clarity: 0.9, rms: 0.1 } // E4
     const previousFeedback = { noteIndex: 0, pitchCorrect: true, timingResult: 'perfect' as TimingResult, timingOffsetMs: 0 }
 
     const result = computeLiveFeedback(
@@ -277,7 +277,7 @@ describe('computeLiveFeedback', () => {
 describe('live feedback and evaluateNote consistency', () => {
   it('produces the same timing result when evaluateNote uses the same sample as live feedback', () => {
     // Simulate: player plays A4 at 100ms offset
-    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9 }
+    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9, rms: 0.1 }
     const offsetMs = 100
 
     // Live feedback computation
@@ -304,7 +304,7 @@ describe('live feedback and evaluateNote consistency', () => {
   it('produces matching timing even when a stale closest sample exists', () => {
     // The key scenario: a leftover transient is closest to the beat, but the
     // correct note arrives later. Live feedback fires on the correct note.
-    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9 }
+    const pitch: DetectedPitch = { frequency: 440, clarity: 0.9, rms: 0.1 }
     const correctOffsetMs = 180
 
     // Live feedback fires on the correct detection

@@ -5,7 +5,7 @@ import type { WalkingBassSequence } from '@core/walking-bass/types.ts'
 import type { ClefType } from '@core/instruments.ts'
 import { getKeySignature, getKeySignatureForScale } from '@core/notation'
 import type { MeasureLabel } from '@core/notation'
-import { MeasureSheetLayout } from '@components/common/MeasureSheetLayout.tsx'
+import { SheetMusic, groupNotesIntoMeasures } from '@core/notation'
 
 interface WalkingBassStaffPreviewProps {
   sequence: WalkingBassSequence | null
@@ -30,7 +30,7 @@ export function WalkingBassStaffPreview({
 
   const measureLabels = useMemo(() => {
     const labels = new Map<number, MeasureLabel[]>()
-    const notesPerMeasure = 4 // walking bass is always quarter notes in 4/4
+    const notesPerMeasure = 4
     for (const boundary of boundaries) {
       const measureIndex = Math.floor(boundary.startNoteIndex / notesPerMeasure)
       const noteIndexInMeasure = boundary.startNoteIndex % notesPerMeasure
@@ -50,14 +50,19 @@ export function WalkingBassStaffPreview({
     return getKeySignature(allNotes)
   }, [sequence, allNotes])
 
+  const measures = useMemo(
+    () => groupNotesIntoMeasures(allNotes, 'quarter', { measureLabels }),
+    [allNotes, measureLabels],
+  )
+
   if (!sequence) return null
 
   return (
-    <MeasureSheetLayout
-      notes={allNotes}
-      noteDuration="quarter"
-      measureLabels={measureLabels}
+    <SheetMusic
+      measures={measures}
       keySignature={keySig}
+      lineWrap={{ count: 4 }}
+      scaling={{ scale: 0.6 }}
       clef={clef}
     />
   )

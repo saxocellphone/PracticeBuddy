@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { loadNotationFont } from "@core/notation/font.ts";
 import { useWasm } from "@hooks/useWasm.ts";
 import { useAudioEngine } from "@hooks/useAudioEngine.ts";
@@ -22,6 +22,7 @@ import { AdvancedSettings } from "@components/common/AdvancedSettings.tsx";
 import { MicSelector } from "@components/common/MicSelector.tsx";
 import { HomePage } from "@components/home/HomePage.tsx";
 import type { PracticeMode, TimingMode } from "@components/home/HomePage.tsx";
+import { ALL_TIMING_MODES, getAllowedTimingModes } from "@components/home/practiceTypes.ts";
 import { ScaleSetup } from "@components/setup/ScaleSetup.tsx";
 import { ScaleBanner } from "@components/practice/ScaleBanner.tsx";
 import { ArpeggioSetup } from "@components/setup/ArpeggioSetup.tsx";
@@ -33,6 +34,9 @@ import { WalkingBassStaffPreview } from "@components/setup/WalkingBassStaffPrevi
 import { WalkingBassResults } from "@components/results/WalkingBassResults.tsx";
 import { SheetMusicView } from "@components/common/SheetMusicView.tsx";
 import { StaffPreview } from "@components/setup/StaffPreview.tsx";
+import { JazzStandardSetup } from "@components/setup/JazzStandardSetup.tsx";
+import { SheetMusic } from "@core/notation";
+import type { SheetMeasure } from "@core/notation";
 import type { ScaleSequence, ScaleStep } from "@core/scales/types.ts";
 import type { ArpeggioSequence, ArpeggioStep } from "@core/arpeggio/types.ts";
 import type {
@@ -43,6 +47,15 @@ import {
   buildAllWalkingBassStepsNotes,
   walkingBassToScaleSequence,
 } from "@core/walking-bass/sequence.ts";
+import { fetchStandardById } from "@core/jazz-standards/repository.ts";
+import {
+  standardToMelodyMeasures,
+  standardToWalkingBassSequence,
+} from "@core/jazz-standards/builder.ts";
+import { getKeySignatureForScale, getKeySignature } from "@core/notation/keySignature.ts";
+import type { KeySignatureInfo } from "@core/notation/keySignature.ts";
+import type { JazzStandardSubMode } from "@core/jazz-standards/types.ts";
+import type { ApproachType } from "@core/walking-bass/types.ts";
 import {
   buildAllArpeggioStepsNotes,
   arpeggioToScaleSequence,
@@ -156,6 +169,7 @@ interface PersistedSettings {
   metronomeEnabled: boolean;
   scaleStartPosition: ScaleStartPosition;
   instrumentId: string;
+  chordFont: string;
 }
 
 const DEFAULT_SETTINGS: PersistedSettings = {
@@ -169,6 +183,7 @@ const DEFAULT_SETTINGS: PersistedSettings = {
   metronomeEnabled: true,
   scaleStartPosition: "strong-beat",
   instrumentId: "bass",
+  chordFont: "default",
 };
 
 function loadSettings(): PersistedSettings {
@@ -195,7 +210,7 @@ function loadSettings(): PersistedSettings {
         parsed.timingMode === "follow" || parsed.timingMode === "rhythm" || parsed.timingMode === "sheet-music"
           ? parsed.timingMode
           : DEFAULT_SETTINGS.timingMode,
-      activeMode: ["scales", "arpeggios", "walking-bass"].includes(
+      activeMode: ["scales", "arpeggios", "walking-bass", "jazz-standards"].includes(
         parsed.activeMode,
       )
         ? parsed.activeMode
@@ -225,6 +240,10 @@ function loadSettings(): PersistedSettings {
         typeof parsed.instrumentId === "string"
           ? parsed.instrumentId
           : DEFAULT_SETTINGS.instrumentId,
+      chordFont:
+        typeof parsed.chordFont === "string"
+          ? parsed.chordFont
+          : DEFAULT_SETTINGS.chordFont,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -275,9 +294,17 @@ function MainApp() {
     useState<ScaleStartPosition>(saved.scaleStartPosition);
   const [instrumentId, setInstrumentId] = useState(saved.instrumentId);
   const instrument = getInstrument(instrumentId);
+  const [chordFont, setChordFont] = useState(saved.chordFont);
 
   // Timing mode: follow (self-paced) or rhythm (beat-synced) — applies to all content types
   const [timingMode, setTimingMode] = useState<TimingMode>(saved.timingMode);
+
+  // Derive which timing modes are disabled for the current practice mode
+  const disabledTimingModes = useMemo(() => {
+    const allowed = getAllowedTimingModes(activeMode)
+    if (allowed.length >= ALL_TIMING_MODES.length) return undefined
+    return new Set(ALL_TIMING_MODES.filter((t) => !allowed.includes(t)))
+  }, [activeMode]);
 
   // Audio engine
   const audio = useAudioEngine();
@@ -292,6 +319,11 @@ function MainApp() {
   // Scale selection (for available scales list)
   const scale = useScaleSelection();
 
+  // Update audio bandpass filter when instrument changes
+  useEffect(() => {
+    audio.setInstrumentFilter(instrument.highpassFreq, instrument.lowpassFreq);
+  }, [audio, instrument.highpassFreq, instrument.lowpassFreq]);
+
   // Pitch detection — derive thresholds from mic sensitivity
   const { clarityThreshold, powerThreshold } =
     sensitivityToThresholds(micSensitivity);
@@ -302,6 +334,8 @@ function MainApp() {
     enabled: view === "practicing",
     clarityThreshold,
     powerThreshold,
+    minFreq: instrument.highpassFreq,
+    maxFreq: instrument.lowpassFreq,
   });
 
   // Metronome
@@ -322,6 +356,7 @@ function MainApp() {
         metronomeEnabled,
         scaleStartPosition,
         instrumentId,
+        chordFont,
       }),
     );
   }, [
@@ -335,6 +370,7 @@ function MainApp() {
     metronomeEnabled,
     scaleStartPosition,
     instrumentId,
+    chordFont,
   ]);
 
   // Persist rhythm settings
@@ -504,6 +540,14 @@ function MainApp() {
     }
   }, [view, rhythmState?.phase, metronomeStop, timingMode]);
 
+  // Jazz standards state
+  const [jazzMelodyMeasures, setJazzMelodyMeasures] = useState<SheetMeasure[] | null>(null)
+  const [jazzKeySig, setJazzKeySig] = useState<KeySignatureInfo | null>(null)
+  const [jazzTitle, setJazzTitle] = useState<string | null>(null)
+  const [jazzSubtitle, setJazzSubtitle] = useState<string | null>(null)
+  const [jazzMelodyClef, setJazzMelodyClef] = useState<'bass' | 'treble'>('treble')
+  const [jazzWalkingBassSeq, setJazzWalkingBassSeq] = useState<WalkingBassSequence | null>(null)
+
   // ---- Navigation ----
 
   const handleGoHome = useCallback(() => {
@@ -512,6 +556,8 @@ function MainApp() {
     stopArpeggio();
     stopWalkingBass();
     metronomeStop();
+    setJazzMelodyMeasures(null);
+    setJazzWalkingBassSeq(null);
     setView("home");
   }, [stopScalePractice, stopRhythm, stopArpeggio, stopWalkingBass, metronomeStop]);
 
@@ -521,13 +567,16 @@ function MainApp() {
     stopArpeggio();
     stopWalkingBass();
     metronomeStop();
+    setJazzMelodyMeasures(null);
+    setJazzWalkingBassSeq(null);
     setView("setup");
   }, [stopScalePractice, stopRhythm, stopArpeggio, stopWalkingBass, metronomeStop]);
 
   const handleSelectMode = useCallback(
     (mode: PracticeMode, timing: TimingMode) => {
       setActiveMode(mode);
-      setTimingMode(timing);
+      const allowed = getAllowedTimingModes(mode);
+      setTimingMode(allowed.includes(timing) ? timing : allowed[0]);
       setView("setup");
     },
     [],
@@ -541,6 +590,52 @@ function MainApp() {
   const [sheetMusicSequence, setSheetMusicSequence] = useState<ScaleSequence | null>(null);
   const [sheetMusicWalkingBass, setSheetMusicWalkingBass] = useState<WalkingBassSequence | null>(null);
   const [sheetMusicArpeggio, setSheetMusicArpeggio] = useState<ArpeggioSequence | null>(null);
+
+  const handleEnterJazzStandardSheetMusic = useCallback(
+    async (
+      standardId: string,
+      subMode: JazzStandardSubMode,
+      walkingBassConfig?: { patternId: string | null; approachType: ApproachType },
+    ) => {
+      const standard = await fetchStandardById(standardId)
+      if (!standard) return
+
+      setJazzTitle(standard.title)
+      setJazzSubtitle(`${standard.composer} — ${standard.key} — ${standard.form}`)
+      setJazzMelodyClef(standard.melodyClef)
+
+      if (subMode === 'melody') {
+        const measures = standardToMelodyMeasures(standard)
+        setJazzMelodyMeasures(measures)
+        setJazzWalkingBassSeq(null)
+
+        // Compute key signature
+        const cofKeySig = getKeySignatureForScale(standard.key, 'Major')
+        if (cofKeySig) {
+          setJazzKeySig(cofKeySig)
+        } else {
+          const allNotes = measures.flatMap((m) => m.notes.map((n) => n.note))
+          setJazzKeySig(getKeySignature(allNotes))
+        }
+      } else {
+        // Walking bass sub-mode
+        const steps = standardToWalkingBassSequence(standard, instrument.defaultOctave)
+        setJazzWalkingBassSeq({
+          id: standardId,
+          name: standard.title,
+          description: `${standard.composer} — ${standard.key}`,
+          steps,
+          patternId: walkingBassConfig?.patternId ?? null,
+          approachType: walkingBassConfig?.approachType ?? 'chromatic-below',
+        })
+        setJazzMelodyMeasures(null)
+        setJazzKeySig(null)
+      }
+
+      setView('practicing')
+    },
+    [instrument.defaultOctave],
+  )
 
   const handleEnterSheetMusic = useCallback((sequence: ScaleSequence) => {
     const expanded = expandScaleSeq(sequence)
@@ -963,12 +1058,22 @@ function MainApp() {
     scales: 'rgb(99, 102, 241)',
     arpeggios: 'rgb(6, 182, 212)',
     'walking-bass': 'rgb(245, 158, 11)',
+    'jazz-standards': 'rgb(168, 85, 247)',
   }
   const accentColor = modeAccentColor[activeMode]
 
   // Build the settings slot for the setup config panel
   const isRhythmMode = timingMode === "rhythm";
   const isSheetMusicMode = timingMode === "sheet-music";
+
+  // Resolve chord font: jazz standards defaults to realbook, others use user setting
+  const CHORD_FONT_MAP: Record<string, string> = {
+    default: 'var(--font-family-mono, monospace)',
+    realbook: "'Caveat', cursive",
+  };
+  const effectiveChordFont = chordFont === 'default' && activeMode === 'jazz-standards'
+    ? CHORD_FONT_MAP.realbook
+    : (CHORD_FONT_MAP[chordFont] ?? CHORD_FONT_MAP.default);
   const setupSettingsSlot = (
     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
       {isRhythmMode ? (
@@ -1141,12 +1246,39 @@ function MainApp() {
             ))}
           </select>
         </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <span
+            style={{
+              fontSize: "0.875rem",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            Chord Symbol Font
+          </span>
+          <select
+            value={chordFont}
+            onChange={(e) => setChordFont(e.target.value)}
+            style={{
+              padding: "6px 10px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-surface)",
+              color: "var(--color-text-primary)",
+              fontSize: "0.85rem",
+              cursor: "pointer",
+            }}
+          >
+            <option value="default">Default (Monospace)</option>
+            <option value="realbook">Real Book (Handwritten)</option>
+          </select>
+        </div>
       </AdvancedSettings>
     </div>
   );
 
   return (
     <AppShell
+      style={{ '--chord-font-family': effectiveChordFont } as React.CSSProperties}
       onGoHome={view !== "home" ? handleGoHome : undefined}
       onBack={
         view === "setup"
@@ -1169,6 +1301,7 @@ function MainApp() {
       timingMode={timingMode}
       onTimingModeChange={setTimingMode}
       showTimingToggle={view === "home" || view === "setup"}
+      disabledTimingModes={view === "setup" ? disabledTimingModes : undefined}
     >
       {view === "home" && (
         <HomePage
@@ -1248,6 +1381,59 @@ function MainApp() {
             }}
           />
         </div>
+      )}
+
+      {view === "setup" && activeMode === "jazz-standards" && (
+        <div
+          style={{
+            padding: "var(--space-xl)",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <JazzStandardSetup
+            onStart={handleEnterJazzStandardSheetMusic}
+            clef={instrument.clef}
+            range={{
+              minMidi: instrument.minMidi,
+              maxMidi: instrument.maxMidi,
+            }}
+          />
+        </div>
+      )}
+
+      {/* Sheet Music fullscreen view — jazz standards melody */}
+      {view === 'practicing' && activeMode === 'jazz-standards' && jazzMelodyMeasures && jazzKeySig && (
+        <SheetMusicView
+          title={jazzTitle ?? ''}
+          subtitle={jazzSubtitle ?? ''}
+          onBack={handleBackToSetup}
+        >
+          <SheetMusic
+            measures={jazzMelodyMeasures}
+            keySignature={jazzKeySig}
+            lineWrap={{ count: 4 }}
+            scaling={{ scale: 0.6 }}
+            maxStretch="uncapped"
+            showTies
+            clef={jazzMelodyClef}
+          />
+        </SheetMusicView>
+      )}
+
+      {/* Sheet Music fullscreen view — jazz standards walking bass */}
+      {view === 'practicing' && activeMode === 'jazz-standards' && jazzWalkingBassSeq && (
+        <SheetMusicView
+          title={jazzTitle ?? ''}
+          subtitle={jazzSubtitle ?? ''}
+          onBack={handleBackToSetup}
+        >
+          <WalkingBassStaffPreview
+            sequence={jazzWalkingBassSeq}
+            range={{ minMidi: instrument.minMidi, maxMidi: instrument.maxMidi }}
+            clef={instrument.clef}
+          />
+        </SheetMusicView>
       )}
 
       {/* Sheet Music fullscreen view — scales/arpeggios */}

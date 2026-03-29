@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import type { SessionState, DetectedPitch, FrequencyToNoteResult, SessionScore } from '@core/wasm/types.ts'
 import type { ArpeggioSessionState } from '@core/arpeggio/types.ts'
 import type { ClefType } from '@core/instruments.ts'
-import { ScaleStaff } from '@core/notation'
+import type { MeasureLabel } from '@core/notation'
+import { SheetMusic, groupNotesIntoMeasures, getKeySignature } from '@core/notation'
 import { PracticeLayout } from './PracticeLayout.tsx'
 import styles from './ArpeggioPracticeView.module.css'
 
@@ -57,6 +58,21 @@ export function ArpeggioPracticeView({
       ? ` \u2014 shifting by ${shift === 1 ? 'half steps' : shift === 2 ? 'whole steps' : shift === 7 ? '5ths' : `${shift} semitones`}`
       : ''
   const loopLabel = completedLoops > 0 ? ` (Loop ${completedLoops + 1}${shiftLabel})` : ''
+
+  const keySig = useMemo(() => getKeySignature(currentNotes), [currentNotes])
+
+  const measureLabels = useMemo(() => {
+    const labels = new Map<number, MeasureLabel[]>()
+    if (currentLabel) {
+      labels.set(0, [{ noteIndex: 0, text: currentLabel }])
+    }
+    return labels
+  }, [currentLabel])
+
+  const measures = useMemo(
+    () => groupNotesIntoMeasures(currentNotes, 'quarter', { measureLabels }),
+    [currentNotes, measureLabels],
+  )
 
   // Banner header
   const banner = (
@@ -171,10 +187,15 @@ export function ArpeggioPracticeView({
     <PracticeLayout
       header={banner}
       notation={
-        <ScaleStaff
-          scaleNotes={currentNotes}
-          currentNoteIndex={sessionState.currentNoteIndex}
-          chordSymbol={currentLabel}
+        <SheetMusic
+          measures={measures}
+          keySignature={keySig}
+          lineWrap="width"
+          activeNote={{
+            currentNoteIndex: sessionState.currentNoteIndex,
+            autoScroll: true,
+          }}
+          hideAccidentals={keySig.type !== 'none'}
           clef={clef}
         />
       }

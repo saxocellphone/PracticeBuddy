@@ -1,10 +1,8 @@
 import styles from './HomePage.module.css'
+import { ALL_TIMING_MODES } from './practiceTypes.ts'
+import type { PracticeMode, TimingMode } from './practiceTypes.ts'
 
-/** Content type — what instrument/theory concept to practice */
-export type PracticeMode = 'scales' | 'arpeggios' | 'walking-bass'
-
-/** Timing mode — how the practice session is paced */
-export type TimingMode = 'follow' | 'rhythm' | 'sheet-music'
+export type { PracticeMode, TimingMode }
 
 interface ModeOption {
   id: PracticeMode
@@ -16,8 +14,8 @@ interface ModeOption {
   accentColor: string
   iconBg: string
   disabled?: boolean
-  /** If true, this mode is not available in rhythm timing */
-  noRhythm?: boolean
+  /** Which timing modes this practice mode supports. Defaults to all three. */
+  timingModes?: TimingMode[]
 }
 
 const MODES: ModeOption[] = [
@@ -51,6 +49,17 @@ const MODES: ModeOption[] = [
     accentColor: 'rgba(245, 158, 11, 1)',
     iconBg: 'rgba(245, 158, 11, 0.1)',
   },
+  {
+    id: 'jazz-standards',
+    title: 'Jazz Standards',
+    followDescription: 'Learn jazz melodies and walk bass over standard changes.',
+    rhythmDescription: 'Play jazz standards in time with the metronome.',
+    sheetMusicDescription: 'View melody and chord notation for jazz standards.',
+    icon: '🎷',
+    accentColor: 'rgba(168, 85, 247, 1)',
+    iconBg: 'rgba(168, 85, 247, 0.1)',
+    timingModes: ['sheet-music'],
+  },
 ]
 
 interface HomePageProps {
@@ -61,9 +70,10 @@ interface HomePageProps {
 export function HomePage({ onSelectMode, initialTimingMode = 'sheet-music' }: HomePageProps) {
   const timing = initialTimingMode
 
-  const visibleModes = timing === 'rhythm'
-    ? MODES.filter((m) => !m.noRhythm)
-    : MODES
+  const visibleModes = MODES.filter((m) => {
+    const allowed = m.timingModes ?? ALL_TIMING_MODES
+    return allowed.includes(timing)
+  })
 
   return (
     <div className={styles.container}>

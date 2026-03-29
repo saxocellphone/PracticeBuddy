@@ -17,8 +17,11 @@ export function usePitchDetection(options: {
   enabled: boolean
   clarityThreshold?: number
   powerThreshold?: number
+  /** Instrument frequency range for post-detection filtering (Hz) */
+  minFreq?: number
+  maxFreq?: number
 }) {
-  const { analyserNode, gainNode, sampleRate, enabled, clarityThreshold = 0.4, powerThreshold = 2.0 } = options
+  const { analyserNode, gainNode, sampleRate, enabled, clarityThreshold = 0.4, powerThreshold = 2.0, minFreq, maxFreq } = options
 
   const [result, setResult] = useState<PitchDetectionResult>({
     pitch: null,
@@ -38,6 +41,9 @@ export function usePitchDetection(options: {
     detectorRef.current = new TypedPitchDetector(sampleRate, bufferSize)
     detectorRef.current.setClarityThreshold(clarityThreshold)
     detectorRef.current.setPowerThreshold(powerThreshold)
+    if (minFreq != null && maxFreq != null) {
+      detectorRef.current.setFrequencyRange(minFreq, maxFreq)
+    }
     agcRef.current = new AutoGainControl()
     bufferRef.current = new Float32Array(new ArrayBuffer(bufferSize * 4))
 
@@ -66,7 +72,7 @@ export function usePitchDetection(options: {
     }
 
     rafRef.current = requestAnimationFrame(tick)
-  }, [analyserNode, gainNode, sampleRate, clarityThreshold, powerThreshold])
+  }, [analyserNode, gainNode, sampleRate, clarityThreshold, powerThreshold, minFreq, maxFreq])
 
   const stopDetection = useCallback(() => {
     cancelAnimationFrame(rafRef.current)

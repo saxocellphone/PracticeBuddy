@@ -9,7 +9,7 @@ import type { ClefType } from '@core/instruments.ts'
 import type { ScaleSequence } from '@core/scales/types.ts'
 import { getKeySignature, getKeySignatureForScale } from '@core/notation'
 import type { MeasureLabel } from '@core/notation'
-import { MeasureSheetLayout } from '@components/common/MeasureSheetLayout.tsx'
+import { SheetMusic, groupNotesIntoMeasures } from '@core/notation'
 
 const BEATS_PER_MEASURE = 4
 
@@ -75,15 +75,19 @@ export function StaffPreview({
     return getKeySignature(allNotes)
   }, [sequence, allNotes])
 
+  const measures = useMemo(
+    () => groupNotesIntoMeasures(allNotes, noteDuration, { restIndices, measureLabels }),
+    [allNotes, noteDuration, restIndices, measureLabels],
+  )
+
   if (!sequence) return null
 
   return (
-    <MeasureSheetLayout
-      notes={allNotes}
-      noteDuration={noteDuration}
-      measureLabels={measureLabels}
+    <SheetMusic
+      measures={measures}
       keySignature={keySig}
-      restIndices={restIndices}
+      lineWrap="width"
+      scaling={{ scale: 0.6, minNotesPerLine: 16 }}
       clef={clef}
     />
   )

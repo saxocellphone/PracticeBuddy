@@ -35,7 +35,8 @@ export function usePracticeSession() {
 
       const newState = sessionRef.current.processFrame(
         pitch.frequency,
-        pitch.clarity
+        pitch.clarity,
+        pitch.rms,
       )
       setSessionState(newState)
 

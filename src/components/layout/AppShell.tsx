@@ -16,6 +16,8 @@ interface AppShellProps {
   timingMode?: TimingMode
   onTimingModeChange?: (mode: TimingMode) => void
   showTimingToggle?: boolean
+  disabledTimingModes?: Set<TimingMode>
+  style?: React.CSSProperties
 }
 
 const TIMING_OPTIONS: { id: TimingMode; label: string; icon: string }[] = [
@@ -24,7 +26,7 @@ const TIMING_OPTIONS: { id: TimingMode; label: string; icon: string }[] = [
   { id: 'rhythm', label: 'Rhythm', icon: '🥁' },
 ]
 
-export function AppShell({ children, onGoHome, onBack, backLabel = 'Home', instrumentName, instruments, instrumentId, onInstrumentChange, timingMode, onTimingModeChange, showTimingToggle }: AppShellProps) {
+export function AppShell({ children, onGoHome, onBack, backLabel = 'Home', instrumentName, instruments, instrumentId, onInstrumentChange, timingMode, onTimingModeChange, showTimingToggle, disabledTimingModes, style }: AppShellProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const badgeRef = useRef<HTMLDivElement>(null)
 
@@ -46,7 +48,7 @@ export function AppShell({ children, onGoHome, onBack, backLabel = 'Home', instr
   const emoji = instrumentId ? (instrumentEmoji[instrumentId] ?? '🎵') : '🎸'
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} style={style}>
       <header className={styles.header}>
         {onBack && (
           <button className={styles.backButton} onClick={onBack}>
@@ -95,16 +97,20 @@ export function AppShell({ children, onGoHome, onBack, backLabel = 'Home', instr
         )}
         {showTimingToggle && timingMode && onTimingModeChange && (
           <div className={styles.timingToggle}>
-            {TIMING_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                className={`${styles.timingOption} ${timingMode === opt.id ? styles.timingOptionActive : ''}`}
-                onClick={() => onTimingModeChange(opt.id)}
-              >
-                <span className={styles.timingIcon}>{opt.icon}</span>
-                {opt.label}
-              </button>
-            ))}
+            {TIMING_OPTIONS.map((opt) => {
+              const disabled = disabledTimingModes?.has(opt.id) ?? false
+              return (
+                <button
+                  key={opt.id}
+                  className={`${styles.timingOption} ${timingMode === opt.id ? styles.timingOptionActive : ''} ${disabled ? styles.timingOptionDisabled : ''}`}
+                  onClick={() => !disabled && onTimingModeChange(opt.id)}
+                  disabled={disabled}
+                >
+                  <span className={styles.timingIcon}>{opt.icon}</span>
+                  {opt.label}
+                </button>
+              )
+            })}
           </div>
         )}
       </header>

@@ -16,6 +16,7 @@ export interface FrequencyToNoteResult {
 export interface DetectedPitch {
   frequency: number
   clarity: number
+  rms: number
 }
 
 export interface ScaleInfo {

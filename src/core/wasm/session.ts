@@ -15,9 +15,10 @@ export class TypedPracticeSession {
 
   processFrame(
     detectedFrequency: number,
-    detectedClarity: number
+    detectedClarity: number,
+    detectedRms: number,
   ): SessionState {
-    return this.inner.processFrame(detectedFrequency, detectedClarity) as SessionState
+    return this.inner.processFrame(detectedFrequency, detectedClarity, detectedRms) as SessionState
   }
 
   skipNote(): SessionState {

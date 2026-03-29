@@ -37,6 +37,8 @@ interface MeasureStaffProps {
     steps: number[]
   }
   beatsPerMeasure?: number
+  /** Override the beats shown in the time signature (e.g. show 4/4 on a pickup measure) */
+  timeSigBeats?: number
   beatValue?: number
   width: number
   height: number
@@ -65,6 +67,8 @@ interface MeasureStaffProps {
   hideAccidentals?: boolean
   /** Override the clef type (defaults to bass) */
   clef?: ClefType
+  /** Override the chord symbol font family */
+  chordFontFamily?: string
 }
 
 export const MeasureStaff = memo(function MeasureStaff({
@@ -74,6 +78,7 @@ export const MeasureStaff = memo(function MeasureStaff({
   showKeySignature = false,
   keySignature,
   beatsPerMeasure = 4,
+  timeSigBeats,
   beatValue = 4,
   width,
   height,
@@ -90,7 +95,9 @@ export const MeasureStaff = memo(function MeasureStaff({
   pastNoteColor,
   hideAccidentals,
   clef,
+  chordFontFamily,
 }: MeasureStaffProps) {
+  const chordFont = chordFontFamily || 'var(--chord-font-family, var(--font-family-mono, monospace))'
   const config: StaffConfig = clef ? { ...DEFAULT_MEASURE_CONFIG, clef } : DEFAULT_MEASURE_CONFIG
 
   const keySigCount = showKeySignature && keySignature ? keySignature.accidentals.length : 0
@@ -98,11 +105,15 @@ export const MeasureStaff = memo(function MeasureStaff({
   const startX = staveContentStartX(config, { showClef, showTimeSignature, keySigAccidentalCount: keySigCount })
   const availableWidth = width - startX
 
-  // Compute per-note x positions (mirrors Voice layout formula)
-  const noteDuration = notes.length > 0 ? notes[0].duration : 'quarter'
-  const durationBeats = NOTE_DURATION_BEATS[noteDuration]
-  const expectedNotesPerMeasure = Math.round(beatsPerMeasure / durationBeats)
-  const noteSpacing = availableWidth / expectedNotesPerMeasure
+  // Compute per-note x positions at beat onset (mirrors Voice layout)
+  let labelBeatPos = 0
+  const noteCenterXs = notes.map(({ duration }) => {
+    const durBeats = NOTE_DURATION_BEATS[duration]
+    const positionDur = Math.min(durBeats, 1)
+    const x = startX + ((labelBeatPos + positionDur / 2) / beatsPerMeasure) * availableWidth
+    labelBeatPos += durBeats
+    return x
+  })
 
   return (
     <svg
@@ -120,12 +131,12 @@ export const MeasureStaff = memo(function MeasureStaff({
       {label && !labels?.length && (
         <text
           x={startX}
-          y={20}
+          y={70}
           textAnchor="start"
           fill="var(--color-text-primary)"
-          fontSize="18"
-          fontWeight={600}
-          fontFamily="var(--font-family-mono, monospace)"
+          fontSize="54"
+          fontWeight={700}
+          fontFamily={chordFont}
         >
           {label}
         </text>
@@ -135,13 +146,13 @@ export const MeasureStaff = memo(function MeasureStaff({
       {labels?.map((ml) => (
         <text
           key={ml.noteIndex}
-          x={startX + noteSpacing * (ml.noteIndex + 0.5)}
-          y={20}
+          x={noteCenterXs[ml.noteIndex] ?? startX}
+          y={70}
           textAnchor="middle"
           fill="var(--color-text-primary)"
-          fontSize="18"
-          fontWeight={600}
-          fontFamily="var(--font-family-mono, monospace)"
+          fontSize="54"
+          fontWeight={700}
+          fontFamily={chordFont}
         >
           {ml.text}
         </text>
@@ -156,7 +167,7 @@ export const MeasureStaff = memo(function MeasureStaff({
         keySignature={keySignature}
         showBarline={showBarline}
         showFinalBarline={showFinalBarline}
-        beatsPerMeasure={beatsPerMeasure}
+        beatsPerMeasure={timeSigBeats ?? beatsPerMeasure}
         beatValue={beatValue}
       >
         <Voice

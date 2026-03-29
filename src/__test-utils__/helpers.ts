@@ -11,8 +11,8 @@ import type { ScaleSequence } from '@core/scales/types.ts'
  * Create a DetectedPitch at a given frequency with configurable clarity.
  * Defaults to clarity 0.9 (high confidence).
  */
-export function makePitch(frequency: number, clarity = 0.9): DetectedPitch {
-  return { frequency, clarity }
+export function makePitch(frequency: number, clarity = 0.9, rms = 0.1): DetectedPitch {
+  return { frequency, clarity, rms }
 }
 
 /**
@@ -59,7 +59,7 @@ function computeFrequency(pitchClass: string, octave: number): number {
  */
 export function makeSample(frequency: number, offsetMs: number, clarity = 0.9): PitchSample {
   return {
-    pitch: { frequency, clarity },
+    pitch: { frequency, clarity, rms: 0.1 },
     offsetMs,
   }
 }

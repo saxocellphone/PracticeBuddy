@@ -38,6 +38,21 @@ interface StaveNoteProps {
   hideAccidentals?: boolean
 }
 
+/** Map dotted durations to their base duration for rendering (head shape, flags). */
+function baseDuration(d: NoteLayout['duration']): 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth' {
+  switch (d) {
+    case 'dotted-half': return 'half'
+    case 'dotted-quarter': return 'quarter'
+    case 'dotted-eighth': return 'eighth'
+    case 'dotted-sixteenth': return 'sixteenth'
+    default: return d
+  }
+}
+
+function isDotted(d: NoteLayout['duration']): boolean {
+  return d.startsWith('dotted-')
+}
+
 export function StaveNote({
   layout,
   config,
@@ -47,6 +62,8 @@ export function StaveNote({
   hideAccidentals = false,
 }: StaveNoteProps) {
   const { note, duration, x, y, index } = layout
+  const base = baseDuration(duration)
+  const dotted = isDotted(duration)
   const noteColor = color ?? config.colors.note
   const ledgerLines = getLedgerLines(y, config)
   const accidental = hideAccidentals ? null : getAccidental(note.pitchClass)
@@ -91,12 +108,22 @@ export function StaveNote({
         fontSize={config.lineSpacing * 3.6}
         fontFamily={NOTATION_FONT_FAMILY}
       >
-        {duration === 'whole'
+        {base === 'whole'
           ? GLYPH_NOTEHEAD_WHOLE
-          : duration === 'half'
+          : base === 'half'
           ? GLYPH_NOTEHEAD_HALF
           : GLYPH_NOTEHEAD_FILLED}
       </text>
+
+      {/* Augmentation dot for dotted durations */}
+      {dotted && (
+        <circle
+          cx={x + nr + 5}
+          cy={y % ls === 0 ? y - ls * 0.5 : y}
+          r={nr * 0.3}
+          fill={noteColor}
+        />
+      )}
 
       {/* Stem (skipped for beamed notes — the Beam component draws those) */}
       {showStem && (
@@ -111,12 +138,12 @@ export function StaveNote({
       )}
 
       {/* Flag for unbeamed eighth/sixteenth notes — Bravura font glyphs */}
-      {(duration === 'eighth' || duration === 'sixteenth') && !isBeamed && (
+      {(base === 'eighth' || base === 'sixteenth') && !isBeamed && (
         <NoteFlag
           stemXPos={stemX(x, y, config)}
           stemYPos={stemTipY(y, config)}
           up={up}
-          isSixteenth={duration === 'sixteenth'}
+          isSixteenth={base === 'sixteenth'}
           color={noteColor}
           lineSpacing={ls}
         />

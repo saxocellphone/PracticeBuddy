@@ -13,25 +13,36 @@ export const SCALE_START_LABELS: Record<ScaleStartPosition, string> = {
 
 // ---- Note duration ----
 
-export type NoteDuration = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
+export type NoteDuration =
+  | 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
+  | 'dotted-half' | 'dotted-quarter' | 'dotted-eighth' | 'dotted-sixteenth'
 
 /** Beat multiplier for each note duration relative to a quarter note */
 export const NOTE_DURATION_BEATS: Record<NoteDuration, number> = {
   whole: 4,
+  'dotted-half': 3,
   half: 2,
+  'dotted-quarter': 1.5,
   quarter: 1,
+  'dotted-eighth': 0.75,
   eighth: 0.5,
+  'dotted-sixteenth': 0.375,
   sixteenth: 0.25,
 }
 
 export const NOTE_DURATION_LABELS: Record<NoteDuration, string> = {
   whole: 'Whole',
+  'dotted-half': 'Dotted Half',
   half: 'Half',
+  'dotted-quarter': 'Dotted Quarter',
   quarter: 'Quarter',
+  'dotted-eighth': 'Dotted Eighth',
   eighth: 'Eighth',
+  'dotted-sixteenth': 'Dotted Sixteenth',
   sixteenth: 'Sixteenth',
 }
 
+/** Non-dotted note durations available for UI selectors (rhythm mode, etc.) */
 export const NOTE_DURATIONS: NoteDuration[] = [
   'whole', 'half', 'quarter', 'eighth', 'sixteenth',
 ]

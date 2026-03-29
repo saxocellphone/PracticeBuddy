@@ -1,3 +1,4 @@
+pub mod signal;
 pub mod note;
 pub mod pitch;
 pub mod scale;

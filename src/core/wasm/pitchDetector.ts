@@ -22,6 +22,14 @@ export class TypedPitchDetector {
     this.inner.setClarityThreshold(threshold)
   }
 
+  setFrequencyRange(minFreq: number, maxFreq: number): void {
+    this.inner.setFrequencyRange(minFreq, maxFreq)
+  }
+
+  setFlatnessThreshold(threshold: number): void {
+    this.inner.setFlatnessThreshold(threshold)
+  }
+
   free(): void {
     this.inner.free()
   }

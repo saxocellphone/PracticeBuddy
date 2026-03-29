@@ -8,15 +8,20 @@ export interface InstrumentConfig {
   maxMidi: number
   defaultOctave: number
   transposition: number // 0 for concert pitch instruments
+  /** Highpass filter cutoff (Hz) — removes rumble below instrument range */
+  highpassFreq: number
+  /** Lowpass filter cutoff (Hz) — removes noise above instrument range + harmonics */
+  lowpassFreq: number
 }
 
 export const INSTRUMENTS: Record<string, InstrumentConfig> = {
   // Bass: E1–G4 (standard 4-string, 24 frets)
-  bass: { id: 'bass', name: 'Bass', clef: 'bass', minMidi: 28, maxMidi: 67, defaultOctave: 2, transposition: 0 },
+  // Highpass below E1 fundamental, lowpass at ~3x max fundamental for harmonics
+  bass: { id: 'bass', name: 'Bass', clef: 'bass', minMidi: 28, maxMidi: 67, defaultOctave: 2, transposition: 0, highpassFreq: 30, lowpassFreq: 1200 },
   // Piano (treble clef): C3–C7 (4 octaves, supports 3-octave scales comfortably)
-  piano: { id: 'piano', name: 'Piano', clef: 'treble', minMidi: 48, maxMidi: 96, defaultOctave: 4, transposition: 0 },
+  piano: { id: 'piano', name: 'Piano', clef: 'treble', minMidi: 48, maxMidi: 96, defaultOctave: 4, transposition: 0, highpassFreq: 80, lowpassFreq: 6000 },
   // Guitar (treble clef, concert pitch): E3–E6 (3 octaves, full 24-fret range written)
-  guitar: { id: 'guitar', name: 'Guitar', clef: 'treble', minMidi: 52, maxMidi: 88, defaultOctave: 4, transposition: 0 },
+  guitar: { id: 'guitar', name: 'Guitar', clef: 'treble', minMidi: 52, maxMidi: 88, defaultOctave: 4, transposition: 0, highpassFreq: 100, lowpassFreq: 4000 },
 }
 
 export const DEFAULT_INSTRUMENT = INSTRUMENTS.bass

@@ -54,6 +54,12 @@ export function useAudioEngine() {
     setDevices(inputDevices)
   }, [])
 
+  const setInstrumentFilter = useCallback((highpassFreq: number, lowpassFreq: number) => {
+    if (engineRef.current) {
+      engineRef.current.setInstrumentFilter(highpassFreq, lowpassFreq)
+    }
+  }, [])
+
   const dispose = useCallback(() => {
     if (engineRef.current) {
       engineRef.current.dispose()
@@ -65,6 +71,7 @@ export function useAudioEngine() {
     initialize,
     dispose,
     switchDevice,
+    setInstrumentFilter,
     audioContext,
     analyserNode,
     gainNode,

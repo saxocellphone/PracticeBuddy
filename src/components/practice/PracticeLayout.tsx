@@ -44,20 +44,23 @@ export function PracticeLayout({
         {/* Staff Notation */}
         {notation}
 
-        {/* Pitch Indicator (cents) */}
+        {/* Detected note + pitch indicator (cents) */}
         {noteResult && (
-          <div className={styles.pitchIndicator}>
-            <span className={styles.pitchLabel}>{'\u266D'} flat</span>
-            <div className={styles.pitchBar}>
-              <div className={styles.pitchCenter} />
-              <div
-                className={styles.pitchNeedle}
-                style={{
-                  left: `${50 + Math.max(-50, Math.min(50, noteResult.centsOffset))}%`,
-                }}
-              />
+          <div className={styles.pitchFeedback}>
+            <span className={styles.detectedNote}>{noteResult.note.name}</span>
+            <div className={styles.pitchIndicator}>
+              <span className={styles.pitchLabel}>{'\u266D'} flat</span>
+              <div className={styles.pitchBar}>
+                <div className={styles.pitchCenter} />
+                <div
+                  className={styles.pitchNeedle}
+                  style={{
+                    left: `${50 + Math.max(-50, Math.min(50, noteResult.centsOffset))}%`,
+                  }}
+                />
+              </div>
+              <span className={styles.pitchLabel}>sharp {'\u266F'}</span>
             </div>
-            <span className={styles.pitchLabel}>sharp {'\u266F'}</span>
           </div>
         )}
 

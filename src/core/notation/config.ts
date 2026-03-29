@@ -8,7 +8,7 @@ export const DEFAULT_MEASURE_CONFIG: StaffConfig = {
   clef: 'bass',
   lineSpacing: 14,
   noteRadius: 8,
-  staffTopMargin: 80,
+  staffTopMargin: 110,
   stemLengthMultiplier: 3.5,
   beamThickness: 3.5,
   beamGap: 5,

@@ -1,7 +1,10 @@
 // --- High-level composed components ---
 export { MeasureStaff } from './MeasureStaff.tsx'
 export type { MeasureLabel } from './MeasureStaff.tsx'
-export { ScaleStaff } from './ScaleStaff.tsx'
+
+// --- Unified sheet music layout ---
+export { SheetMusic, groupNotesIntoMeasures } from './sheetMusic/index.ts'
+export type { SheetMeasure, SheetMusicProps, LineWrapStrategy, ScaleMode, ActiveNoteConfig } from './sheetMusic/index.ts'
 
 // --- Building-block components ---
 export { Stave } from './components/Stave.tsx'

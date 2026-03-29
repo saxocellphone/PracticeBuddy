@@ -10,6 +10,8 @@ export class AudioEngine {
   private _audioContext: AudioContext | null = null
   private _analyserNode: AnalyserNode | null = null
   private _gainNode: GainNode | null = null
+  private _highpassNode: BiquadFilterNode | null = null
+  private _lowpassNode: BiquadFilterNode | null = null
   private _sourceNode: MediaStreamAudioSourceNode | null = null
   private _mediaStream: MediaStream | null = null
   private _stateListeners: Set<(state: AudioEngineState) => void> = new Set()
@@ -81,12 +83,26 @@ export class AudioEngine {
       this._gainNode = this._audioContext.createGain()
       this._gainNode.gain.value = 1.0
 
+      // Bandpass filtering: highpass removes rumble, lowpass removes noise
+      this._highpassNode = this._audioContext.createBiquadFilter()
+      this._highpassNode.type = 'highpass'
+      this._highpassNode.frequency.value = 30
+      this._highpassNode.Q.value = 0.7 // Butterworth (no resonance peak)
+
+      this._lowpassNode = this._audioContext.createBiquadFilter()
+      this._lowpassNode.type = 'lowpass'
+      this._lowpassNode.frequency.value = 6000
+      this._lowpassNode.Q.value = 0.7
+
       this._analyserNode = this._audioContext.createAnalyser()
       this._analyserNode.fftSize = 8192
       this._analyserNode.smoothingTimeConstant = 0
 
+      // Audio graph: source → gain → highpass → lowpass → analyser
       this._sourceNode.connect(this._gainNode)
-      this._gainNode.connect(this._analyserNode)
+      this._gainNode.connect(this._highpassNode)
+      this._highpassNode.connect(this._lowpassNode)
+      this._lowpassNode.connect(this._analyserNode)
 
       // Handle browser autoplay policy
       if (this._audioContext.state === 'suspended') {
@@ -98,6 +114,16 @@ export class AudioEngine {
       console.error('AudioEngine initialization failed:', error)
       this.setState('error')
       throw error
+    }
+  }
+
+  /** Update bandpass filter cutoffs for the selected instrument. */
+  setInstrumentFilter(highpassFreq: number, lowpassFreq: number): void {
+    if (this._highpassNode) {
+      this._highpassNode.frequency.value = highpassFreq
+    }
+    if (this._lowpassNode) {
+      this._lowpassNode.frequency.value = lowpassFreq
     }
   }
 
@@ -127,7 +153,7 @@ export class AudioEngine {
       },
     })
 
-    // Reconnect audio graph: source → gainNode → analyserNode
+    // Reconnect audio graph: source → gainNode → (filters) → analyserNode
     this._sourceNode = this._audioContext.createMediaStreamSource(this._mediaStream)
     this._sourceNode.connect(this._gainNode)
   }
@@ -161,6 +187,8 @@ export class AudioEngine {
     }
     this._analyserNode = null
     this._gainNode = null
+    this._highpassNode = null
+    this._lowpassNode = null
     this.setState('uninitialized')
   }
 }
